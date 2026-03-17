@@ -264,6 +264,30 @@ escape_regex() {
   printf '%s' "$1" | sed -e 's/[][(){}.^$+*?|\\]/\\&/g'
 }
 
+probe_backend_port() {
+  local port="$1"
+  for endpoint in "/api/health" "/api/auth/status"; do
+    if curl -fsS "http://127.0.0.1:${port}${endpoint}" >/dev/null; then
+      echo "$port"
+      return 0
+    fi
+  done
+  return 1
+}
+
+probe_backend_candidates() {
+  local start_port="${1:-2136}"
+  local end_port="${2:-2164}"
+  local port=""
+  for ((port=start_port; port<=end_port; port++)); do
+    if probe_backend_port "$port" >/dev/null; then
+      echo "$port"
+      return 0
+    fi
+  done
+  return 1
+}
+
 build_launcher_command() {
   LAUNCH_COMMAND=("$LAUNCHER_PATH")
 
@@ -574,6 +598,7 @@ sleep 2
 BACKEND_PORT=""
 HANDOFF_PID=""
 LAUNCHER_EXIT_OBSERVED_AT=""
+LAST_PROGRESS_TICK="$SECONDS"
 
 if [[ -z "$PID" ]]; then
   echo "WARNING: Could not start packaged launcher. App may have exited immediately."
@@ -629,26 +654,38 @@ while [[ $SECONDS -lt $DEADLINE ]]; do
     fi
   fi
   if [[ -n "$BACKEND_PORT" ]]; then
-    if curl -fsS "http://127.0.0.1:${BACKEND_PORT}/api/health" >/dev/null; then
+    if probe_backend_port "$BACKEND_PORT" >/dev/null; then
       echo "Backend health check PASSED on port $BACKEND_PORT."
       break
     fi
+  else
+    BACKEND_PORT="$(probe_backend_candidates || true)"
+    if [[ -n "$BACKEND_PORT" ]]; then
+      echo "Backend health check PASSED on probed port $BACKEND_PORT."
+      break
+    fi
+  fi
+
+  if (( SECONDS - LAST_PROGRESS_TICK >= 15 )); then
+    ELAPSED=$((STARTUP_TIMEOUT - (DEADLINE - SECONDS)))
+    echo "Waiting for backend startup... elapsed=${ELAPSED}s/${STARTUP_TIMEOUT}s launcher_pid=${PID:-n/a} live_pid=${LIVE_PID:-n/a} backend_port=${BACKEND_PORT:-unknown}"
+    LAST_PROGRESS_TICK="$SECONDS"
   fi
   sleep 1
 done
 
 if [[ -z "$BACKEND_PORT" ]]; then
-  echo "ERROR: Backend never reported a started port in $STARTUP_LOG"
+  echo "ERROR: Backend never became reachable and no started port was discovered."
   [[ -f "$STARTUP_LOG" ]] && tail -n 120 "$STARTUP_LOG"
   echo ""
   echo "Launcher stderr:"
   cat "$LAUNCHER_STDERR" 2>/dev/null || true
-  dump_failure_diagnostics "backend never reported a started port"
+  dump_failure_diagnostics "backend never became reachable"
   exit 1
 fi
 
-if ! curl -fsS "http://127.0.0.1:${BACKEND_PORT}/api/health" >/dev/null; then
-  echo "ERROR: Backend did not answer /api/health on port $BACKEND_PORT"
+if ! probe_backend_port "$BACKEND_PORT" >/dev/null; then
+  echo "ERROR: Backend did not answer health/auth status on port $BACKEND_PORT"
   [[ -f "$STARTUP_LOG" ]] && tail -n 120 "$STARTUP_LOG"
   echo ""
   echo "Launcher stderr:"
@@ -689,7 +726,7 @@ echo "Waiting ${LIVENESS_TIMEOUT}s for liveness..."
 sleep "$LIVENESS_TIMEOUT"
 LIVE_PID="$(find_live_packaged_pid)"
 if [[ -n "$LIVE_PID" ]] && kill -0 "$LIVE_PID" 2>/dev/null; then
-  if curl -fsS "http://127.0.0.1:${BACKEND_PORT}/api/health" >/dev/null; then
+  if probe_backend_port "$BACKEND_PORT" >/dev/null; then
     echo "App process ($LIVE_PID) and backend still healthy after ${LIVENESS_TIMEOUT}s — liveness check PASSED."
   else
     echo "ERROR: App stayed open but backend health check failed after ${LIVENESS_TIMEOUT}s."
@@ -700,7 +737,7 @@ if [[ -n "$LIVE_PID" ]] && kill -0 "$LIVE_PID" 2>/dev/null; then
     dump_failure_diagnostics "backend liveness check failed after startup"
     exit 1
   fi
-elif curl -fsS "http://127.0.0.1:${BACKEND_PORT}/api/health" >/dev/null; then
+elif probe_backend_port "$BACKEND_PORT" >/dev/null; then
   echo "WARNING: No packaged app process was detected after ${LIVENESS_TIMEOUT}s, but the packaged backend remained healthy."
   echo "         Treating backend liveness as the release gate for this launcher path."
 else

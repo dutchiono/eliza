@@ -499,9 +499,9 @@ jobs:
           fi
 
           mapfile -t archive_members < <("${list_cmd[@]}")
-          printf '%s\n' "${archive_members[@]}" | grep -Eq '(^|/)renderer/index\.html$'
-          printf '%s\n' "${archive_members[@]}" | grep -Eq '(^|/)renderer/assets/.+\.(js|css)$'
-          printf '%s\n' "${archive_members[@]}" | grep -Eq '(^|/)home-dist/(bin|entry)\.js$'
+          printf '%s\n' "${archive_members[@]}" | grep -Eq '(^|/)(renderer/)?index\.html$'
+          printf '%s\n' "${archive_members[@]}" | grep -Eq '(^|/)(renderer/)?assets/.+\.(js|css)$'
+          printf '%s\n' "${archive_members[@]}" | grep -Eq '(^|/)home-dist/.+\.(js|mjs|cjs)$'
 
       - name: Stage Windows setup executables
         if: matrix.platform.os == 'windows'
