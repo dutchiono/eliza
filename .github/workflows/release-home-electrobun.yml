@@ -205,9 +205,9 @@ jobs:
       - name: Stage desktop bundle inputs
         run: |
           if [ "${{ matrix.platform.os }}" = "macos" ] && [ "${{ matrix.platform.artifact-name }}" = "macos-x64" ]; then
-            ELIZA_HOME_DESKTOP_COMMAND_PREFIX="arch -x86_64" node scripts/home-desktop-build.mjs stage --build-whisper
+            ELIZA_HOME_DESKTOP_COMMAND_PREFIX="arch -x86_64" node scripts/home-desktop-build.mjs stage --build-whisper --skip-install --skip-generate-types
           else
-            node scripts/home-desktop-build.mjs stage --build-whisper
+            node scripts/home-desktop-build.mjs stage --build-whisper --skip-install --skip-generate-types
           fi
 
       - name: Set up macOS signing keychain

@@ -21,6 +21,8 @@ const args = argv.slice(flagStart);
 
 const buildEnv = getArgValue(args, "env") ?? process.env.BUILD_ENV ?? "";
 const buildWhisper = getBooleanArg(args, "build-whisper");
+const skipInstall = getBooleanArg(args, "skip-install");
+const skipGenerateTypes = getBooleanArg(args, "skip-generate-types");
 
 function fail(message, code = 1) {
   console.error(`[home-desktop-build] ${message}`);
@@ -146,20 +148,24 @@ function ensureAppDirs() {
 function stageDesktopBuild() {
   ensureAppDirs();
 
-  const installArgs = ["install"];
-  if (process.env.CI === "true") {
-    installArgs.push("--frozen-lockfile", "--ignore-scripts");
+  if (!skipInstall) {
+    const installArgs = ["install"];
+    if (process.env.CI === "true") {
+      installArgs.push("--frozen-lockfile", "--ignore-scripts");
+    }
+
+    runBun(installArgs, {
+      cwd: ROOT,
+      label: "Ensuring workspace dependencies are installed",
+    });
   }
 
-  runBun(installArgs, {
-    cwd: ROOT,
-    label: "Ensuring workspace dependencies are installed",
-  });
-
-  runBun(["run", "generate:types"], {
-    cwd: ROOT,
-    label: "Generating shared protobuf types",
-  });
+  if (!skipGenerateTypes) {
+    runBun(["run", "generate:types"], {
+      cwd: ROOT,
+      label: "Generating shared protobuf types",
+    });
+  }
 
   runBun(["run", "build:dist"], {
     cwd: RUNTIME_DIR,
@@ -261,6 +267,9 @@ Commands:
 Options:
   --env <channel>   Electrobun build env (e.g. canary, stable)
   --build-whisper   Build whisper.cpp on macOS/Linux during stage
+  --skip-install    Skip workspace dependency installation before staging
+  --skip-generate-types
+                    Skip shared protobuf generation before staging
 
 Environment:
   ELIZA_HOME_DESKTOP_COMMAND_PREFIX   Prefix every spawned command, e.g. "arch -x86_64"
