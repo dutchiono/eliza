@@ -1,7 +1,7 @@
 /**
  * RPC Handler Registration for Electrobun
  *
- * Maps each RPC request method from Eliza HomeRPCSchema.bun.requests
+ * Maps each RPC request method from ElizaHomeRPCSchema.bun.requests
  * to the corresponding native module method. This is the Bun-side
  * equivalent of Electron's ipcMain.handle() registration.
  *
@@ -57,7 +57,7 @@ type ElectrobunRpcWithHandlers = {
  * Register all RPC request handlers on the given rpc instance.
  *
  * Each handler receives typed params and must return the typed response
- * matching Eliza HomeRPCSchema.bun.requests[method].
+ * matching ElizaHomeRPCSchema.bun.requests[method].
  */
 export function registerRpcHandlers(
   rpc: ElectrobunRpcWithHandlers | null | undefined,

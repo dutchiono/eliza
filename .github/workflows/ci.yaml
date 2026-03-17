@@ -117,11 +117,13 @@ jobs:
         run: bun install
 
       - name: Setup Python
+        if: github.event_name == 'pull_request' || github.ref_name == 'main'
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
 
       - name: Install Python lint tooling
+        if: github.event_name == 'pull_request' || github.ref_name == 'main'
         run: |
           python -m pip install --upgrade pip
           python -m pip install ruff
@@ -132,10 +134,20 @@ jobs:
       - name: Prompt secret scan
         run: cd packages/prompts && bun run check:secrets
 
+      - name: Check Home branch format
+        if: github.event_name == 'push' && github.ref_name == 'dutchiono/eliza-home'
+        run: bun run format:check:home-electrobun
+
       - name: Check format
+        if: github.event_name == 'pull_request' || github.ref_name == 'main'
         run: bun run format:check
 
+      - name: Run Home branch lint
+        if: github.event_name == 'push' && github.ref_name == 'dutchiono/eliza-home'
+        run: bun run lint:home-electrobun
+
       - name: Run lint
+        if: github.event_name == 'pull_request' || github.ref_name == 'main'
         run: bun run lint
 
   # Build job

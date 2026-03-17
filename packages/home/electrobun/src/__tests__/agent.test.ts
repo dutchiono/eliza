@@ -418,10 +418,7 @@ describe("AgentManager", () => {
           if (candidate === MOCK_DIST_PATH) return true;
           if (candidate === "/Users/test/AppData/Local/bun/bun.exe")
             return true;
-          if (
-            typeof candidate === "string" &&
-            candidate.endsWith("/bin.js")
-          ) {
+          if (typeof candidate === "string" && candidate.endsWith("/bin.js")) {
             return true;
           }
           return false;

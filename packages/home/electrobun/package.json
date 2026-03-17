@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "bun run build:preload && PATH=\"$PWD/scripts/bin:$PATH\" bunx electrobun dev",
-    "build": "bun run build:preload && PATH=\"$PWD/scripts/bin:$PATH\" bunx electrobun build",
+    "build": "bun run build:preload",
+    "package": "bun run build:preload && PATH=\"$PWD/scripts/bin:$PATH\" bunx electrobun build",
     "typecheck": "tsc --noEmit",
     "test": "bunx vitest run --config vitest.config.ts",
     "lint": "bunx @biomejs/biome check src",

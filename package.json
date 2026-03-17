@@ -20,6 +20,8 @@
     "desktop:home:package": "node scripts/home-desktop-build.mjs package",
     "desktop:home:build": "node scripts/home-desktop-build.mjs build",
     "desktop:home:run": "node scripts/home-desktop-build.mjs run",
+    "lint:home-electrobun": "cd packages/home/electrobun && bun run lint",
+    "format:check:home-electrobun": "bunx @biomejs/biome format packages/home/electrobun/src packages/home/electrobun/electrobun.config.ts scripts/home-desktop-build.mjs",
     "build:client": "turbo run build --filter=@elizaos/client",
     "format": "turbo run format",
     "format:check": "turbo run format:check",

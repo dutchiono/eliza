@@ -559,7 +559,12 @@ export class DesktopManager {
   // MARK: - Auto-launch helpers (Linux)
 
   private getLinuxAutostartPath(): string {
-    return path.join(os.homedir(), ".config", "autostart", "eliza-home.desktop");
+    return path.join(
+      os.homedir(),
+      ".config",
+      "autostart",
+      "eliza-home.desktop",
+    );
   }
 
   private setAutoLaunchLinux(

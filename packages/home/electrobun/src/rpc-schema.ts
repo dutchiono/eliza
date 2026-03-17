@@ -279,7 +279,7 @@ export interface MessageBoxResult {
 // RPC Schema
 // ============================================================================
 
-export type Eliza HomeRPCSchema = {
+export type ElizaHomeRPCSchema = {
   bun: RPCSchema<{
     requests: {
       // ---- Desktop: Tray ----

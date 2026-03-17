@@ -166,10 +166,13 @@ function stageDesktopBuild() {
     label: "Building autonomous runtime bundle",
   });
 
-  runNode(["--import", "tsx", "scripts/write-build-info.ts", RUNTIME_DIST_DIR], {
-    cwd: ROOT,
-    label: "Writing runtime build metadata",
-  });
+  runNode(
+    ["--import", "tsx", "scripts/write-build-info.ts", RUNTIME_DIST_DIR],
+    {
+      cwd: ROOT,
+      label: "Writing runtime build metadata",
+    },
+  );
 
   runNode(
     [
@@ -217,7 +220,7 @@ function stageDesktopBuild() {
 
 function packageDesktopBuild() {
   ensureAppDirs();
-  const packageArgs = ["run", "build"];
+  const packageArgs = ["run", "package"];
   if (buildEnv) {
     packageArgs.push("--", `--env=${buildEnv}`);
   }

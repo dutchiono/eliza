@@ -45,7 +45,9 @@ describe("resolveConfigDir", () => {
       platform: "darwin",
       homedir: "/Users/test",
     });
-    expect(result).toBe(path.posix.join("/Users/test", ".config", "Eliza Home"));
+    expect(result).toBe(
+      path.posix.join("/Users/test", ".config", "Eliza Home"),
+    );
   });
 
   it("returns ~/.config/Eliza Home on Linux", () => {
@@ -63,7 +65,9 @@ describe("resolveConfigDir", () => {
       homedir: "/Users/test",
     });
     // Should use ~/.config, not APPDATA
-    expect(result).toBe(path.posix.join("/Users/test", ".config", "Eliza Home"));
+    expect(result).toBe(
+      path.posix.join("/Users/test", ".config", "Eliza Home"),
+    );
   });
 
   it("uses explicit appdata over process.env.APPDATA", () => {
