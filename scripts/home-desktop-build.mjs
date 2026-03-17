@@ -156,6 +156,11 @@ function stageDesktopBuild() {
     label: "Ensuring workspace dependencies are installed",
   });
 
+  runBun(["run", "generate:types"], {
+    cwd: ROOT,
+    label: "Generating shared protobuf types",
+  });
+
   runBun(["run", "build:dist"], {
     cwd: RUNTIME_DIR,
     label: "Building autonomous runtime bundle",

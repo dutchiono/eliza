@@ -115,6 +115,9 @@ jobs:
       - name: Run repository postinstall patches
         run: bun run postinstall
 
+      - name: Generate shared proto types
+        run: bun run generate:types
+
       - name: Align version with release tag
         run: node scripts/align-home-electrobun-version.mjs
         env:
@@ -185,6 +188,9 @@ jobs:
 
       - name: Run repository postinstall patches
         run: bun run postinstall
+
+      - name: Generate shared proto types
+        run: bun run generate:types
 
       - name: Cache Whisper models and binaries
         if: matrix.platform.os == 'macos' || matrix.platform.os == 'linux'

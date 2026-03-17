@@ -44,6 +44,9 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Generate shared proto types
+        run: bun run generate:types
+
       - name: Create test env file
         run: |
           echo "TEST_DATABASE_CLIENT=pglite" > packages/typescript/.env.test
@@ -113,6 +116,19 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Python lint tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ruff
+
+      - name: Generate shared proto types
+        run: bun run generate:types
+
       - name: Prompt secret scan
         run: cd packages/prompts && bun run check:secrets
 
@@ -146,6 +162,9 @@ jobs:
 
       - name: Install dependencies
         run: bun install
+
+      - name: Generate shared proto types
+        run: bun run generate:types
 
       - name: Build packages
         run: bun run build
@@ -222,6 +241,9 @@ jobs:
       - name: Run repository postinstall patches
         run: bun run postinstall
 
+      - name: Generate shared proto types
+        run: bun run generate:types
+
       - name: Align version with release tag
         run: node scripts/align-home-electrobun-version.mjs
         env:
@@ -293,6 +315,9 @@ jobs:
 
       - name: Run repository postinstall patches
         run: bun run postinstall
+
+      - name: Generate shared proto types
+        run: bun run generate:types
 
       - name: Cache Whisper models and binaries
         if: matrix.platform.os == 'macos' || matrix.platform.os == 'linux'
