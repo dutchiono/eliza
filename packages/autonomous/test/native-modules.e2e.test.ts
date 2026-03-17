@@ -345,8 +345,8 @@ describe("Electrobun Native Module Configuration", () => {
   it("electrobun app package is present and depends on electrobun", () => {
     const electrobunPkgPath = path.join(
       packageRoot,
-      "apps",
-      "app",
+      "packages",
+      "home",
       "electrobun",
       "package.json",
     );
@@ -380,7 +380,7 @@ describe("Electrobun Native Module Configuration", () => {
           packageRoot,
           ".github",
           "workflows",
-          "release-electrobun.yml",
+          "release-home-electrobun.yml",
         ),
       ),
     ).toBe(true);

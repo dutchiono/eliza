@@ -16,6 +16,10 @@
     "start": "echo 'CLI package not found. Please use elizaos start from a project directory.'",
     "start:debug": "cross-env NODE_NO_WARNINGS=1 LOG_LEVEL=debug elizaos start",
     "build": "turbo run build",
+    "desktop:home:stage": "node scripts/home-desktop-build.mjs stage",
+    "desktop:home:package": "node scripts/home-desktop-build.mjs package",
+    "desktop:home:build": "node scripts/home-desktop-build.mjs build",
+    "desktop:home:run": "node scripts/home-desktop-build.mjs run",
     "build:client": "turbo run build --filter=@elizaos/client",
     "format": "turbo run format",
     "format:check": "turbo run format:check",
@@ -53,11 +57,13 @@
     "test:plugins": "turbo run test --concurrency 3 --filter='./plugins/*'",
     "test:client": "turbo run test --filter=./packages/client",
     "test:core": "turbo run test --filter=./packages/typescript",
-    "test:server": "turbo run test --filter=./packages/server"
+    "test:server": "turbo run test --filter=./packages/server",
+    "release:check:home-electrobun": "node --import tsx scripts/release-check-home-electrobun.ts"
   },
   "packageManager": "bun@1.3.5",
   "workspaces": [
     "packages/*",
+    "packages/home/electrobun",
     "packages/computeruse/packages/*",
     "apps/*"
   ],
@@ -76,6 +82,7 @@
     "bun": "^1.3.5",
     "lerna": "9.0.3",
     "turbo": "^2.7.4",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.17"
   },
