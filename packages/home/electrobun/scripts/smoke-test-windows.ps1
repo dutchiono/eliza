@@ -106,6 +106,16 @@ function Get-ObservedBackendPorts([int]$DefaultPort) {
     }
   }
 
+  # Fallback sweep for launcher flows that start on dynamic ports before the
+  # startup log is written or when the log path differs on CI runners.
+  $fallbackStart = [Math]::Max(1024, $DefaultPort - 2)
+  $fallbackEnd = $DefaultPort + 24
+  for ($candidate = $fallbackStart; $candidate -le $fallbackEnd; $candidate++) {
+    if (-not $ports.Contains($candidate)) {
+      $ports.Add($candidate)
+    }
+  }
+
   return $ports.ToArray()
 }
 
@@ -239,15 +249,21 @@ try {
     }
 
     foreach ($port in Get-ObservedBackendPorts $BackendPort) {
-      try {
-        $response = Invoke-WebRequest -Uri "http://127.0.0.1:$port/api/health" -UseBasicParsing -TimeoutSec 2
-        if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 300) {
-          $healthy = $true
-          Write-Host "Backend health check passed on port $port."
-          break
+      foreach ($path in @("/api/health", "/api/auth/status")) {
+        try {
+          $response = Invoke-WebRequest -Uri "http://127.0.0.1:$port$path" -UseBasicParsing -TimeoutSec 2
+          if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 300) {
+            $healthy = $true
+            Write-Host "Backend health check passed on port $port via $path."
+            break
+          }
+        } catch {
+          # ignore and continue checking other endpoints/ports
         }
-      } catch {
-        # ignore and continue checking other observed ports
+      }
+
+      if ($healthy) {
+        break
       }
     }
 

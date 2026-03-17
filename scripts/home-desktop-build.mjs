@@ -23,6 +23,8 @@ const buildEnv = getArgValue(args, "env") ?? process.env.BUILD_ENV ?? "";
 const buildWhisper = getBooleanArg(args, "build-whisper");
 const skipInstall = getBooleanArg(args, "skip-install");
 const skipGenerateTypes = getBooleanArg(args, "skip-generate-types");
+const skipNativeEffects =
+  (process.env.ELIZA_HOME_SKIP_NATIVE_EFFECTS ?? "0") === "1";
 
 function fail(message, code = 1) {
   console.error(`[home-desktop-build] ${message}`);
@@ -137,6 +139,26 @@ function runPackageBinary(binary, binaryArgs, options = {}) {
   fail(`Could not find bunx or npx to run ${binary}.`);
 }
 
+function runBunOptional(commandArgs, options = {}) {
+  const { cwd = ROOT, env = process.env, label } = options;
+  const bun = which("bun");
+  if (!bun) {
+    fail('Could not find "bun" in PATH.');
+  }
+
+  const invocation = buildInvocation(bun, commandArgs);
+  const rendered = [invocation.command, ...invocation.args].join(" ");
+  console.log(`[home-desktop-build] ${label ?? rendered}`);
+
+  const result = spawnSync(invocation.command, invocation.args, {
+    cwd,
+    env,
+    stdio: "inherit",
+  });
+
+  return result.status === 0;
+}
+
 function ensureAppDirs() {
   for (const dir of [HOME_DIR, ELECTROBUN_DIR, RUNTIME_DIR]) {
     if (!fs.existsSync(dir)) {
@@ -212,10 +234,19 @@ function stageDesktopBuild() {
   });
 
   if (process.platform === "darwin") {
-    runBun(["run", "build:native-effects"], {
-      cwd: ELECTROBUN_DIR,
-      label: "Building native macOS effects dylib",
-    });
+    if (skipNativeEffects) {
+      console.warn(
+        "[home-desktop-build] Skipping native macOS effects dylib build (ELIZA_HOME_SKIP_NATIVE_EFFECTS=1).",
+      );
+    } else {
+      const ok = runBunOptional(["run", "build:native-effects"], {
+        cwd: ELECTROBUN_DIR,
+        label: "Building native macOS effects dylib",
+      });
+      if (!ok) {
+        fail("Native macOS effects dylib build failed.");
+      }
+    }
   }
 
   if (

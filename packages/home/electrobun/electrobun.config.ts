@@ -1,4 +1,11 @@
 import type { ElectrobunConfig } from "electrobun";
+import { existsSync, statSync } from "node:fs";
+
+const macEffectsDylibUrl = new URL("./src/libMacWindowEffects.dylib", import.meta.url);
+const hasMacEffectsDylib =
+  process.platform === "darwin" &&
+  existsSync(macEffectsDylibUrl) &&
+  statSync(macEffectsDylibUrl).size > 0;
 
 export default {
   app: {
@@ -50,7 +57,7 @@ export default {
       "../../autonomous/dist": "home-dist",
       // libMacWindowEffects.dylib is macOS-only — only copy when building on macOS.
       // On Windows/Linux this file does not exist and the copy would fail the build.
-      ...(process.platform === "darwin"
+      ...(hasMacEffectsDylib
         ? { "src/libMacWindowEffects.dylib": "libMacWindowEffects.dylib" }
         : {}),
     },
