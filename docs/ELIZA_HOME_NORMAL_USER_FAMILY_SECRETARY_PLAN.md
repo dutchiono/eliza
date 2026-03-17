@@ -1,4 +1,4 @@
-# Eliza Home "Normal People + Family Secretary" Product Plan (Build-Gated)
+# Eliza Home "Normal People + Family Secretary" Product Plan (Build-Gated + Food for Thought)
 
 ## Summary
 
@@ -7,6 +7,32 @@ Create a product/implementation planning doc focused on making Eliza usable for 
 This plan is explicitly build-gated: no feature execution until Home desktop build/release is consistently green.
 
 V1 priority is onboarding-first, with heartbeat concepts hidden from default UX and a clear path to family organizer workflows.
+
+## Food for Thought: Product Lens for Developers
+
+This document is not only an implementation plan. It is also a thinking aid for building Eliza as a life utility, not just a feature set.
+
+As you design and ship, pressure-test decisions against this question:
+
+`Does this make family life meaningfully easier for non-technical people in under five minutes?`
+
+## Food for Thought: Questions to Ask Before Building
+
+- Is this reducing cognitive load for the household organizer, or adding new setup/admin burden?
+- Does the user understand what Eliza is doing without technical language?
+- Can a parent explain this feature to a child in plain words?
+- If this fails, does the user know what happened and what to do next?
+- Are we optimizing for real household routines (school, appointments, logistics), not just demo flows?
+- Does this respect family trust boundaries by default?
+- If budget is tight, does this still feel useful?
+
+## Food for Thought: Everyday Life Scenarios
+
+- "School morning chaos": Can Eliza summarize today's schedule and missing prep items quickly?
+- "Split household planning": Can two guardians coordinate calendar/email tasks without duplicated effort?
+- "Kid asks for help": Can a child use Eliza safely within parent-set budget/permission limits?
+- "Low-budget month": Can the family still get reliable value with strict quota and throttled usage?
+- "Travel week": Can Eliza proactively surface conflicts, reminders, and follow-ups with minimal prompting?
 
 ## Implementation Changes
 
