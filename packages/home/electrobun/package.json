@@ -8,7 +8,7 @@
     "build": "bun run build:preload",
     "package": "bun run build:preload && PATH=\"$PWD/scripts/bin:$PATH\" bunx electrobun build",
     "typecheck": "tsc --noEmit",
-    "test": "bunx vitest run --config ./vitest.config.ts",
+    "test": "bunx vitest run --config ./vitest.config.mjs",
     "lint": "bunx @biomejs/biome check src",
     "build:preload": "bun build src/bridge/electrobun-preload.ts --target browser --format iife --outfile src/preload.js --minify",
     "build:whisper": "bash scripts/build-whisper.sh",
