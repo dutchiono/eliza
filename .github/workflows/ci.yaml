@@ -545,6 +545,51 @@ jobs:
           printf '%s\n' "${archive_members[@]}" | grep -Eq '(^|/)(renderer/)?assets/.+\.(js|css)$'
           printf '%s\n' "${archive_members[@]}" | grep -Eq '(^|/)home-dist/.+\.(js|mjs|cjs)$'
 
+      - name: Collect smoke diagnostics (Linux)
+        if: always() && matrix.platform.os == 'linux'
+        run: |
+          diag_dir="packages/home/electrobun/artifacts/smoke-diagnostics/linux"
+          mkdir -p "$diag_dir"
+          find packages/home/electrobun/artifacts -maxdepth 1 -type f | sort > "$diag_dir/artifacts-list.txt" || true
+          archive="$(find packages/home/electrobun/artifacts -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.tar.zst' \) | head -1)"
+          if [[ -n "$archive" ]]; then
+            echo "archive=$archive" > "$diag_dir/archive.txt"
+            if [[ "$archive" == *.tar.zst ]]; then
+              tar --zstd -tf "$archive" > "$diag_dir/archive-members.txt" || true
+            else
+              tar -tzf "$archive" > "$diag_dir/archive-members.txt" || true
+            fi
+          fi
+
+      - name: Collect smoke diagnostics (macOS)
+        if: always() && matrix.platform.os == 'macos'
+        run: |
+          diag_dir="packages/home/electrobun/artifacts/smoke-diagnostics/macos"
+          mkdir -p "$diag_dir"
+          if [[ -d "${{ runner.temp }}/eliza-home-smoke-diagnostics" ]]; then
+            cp -R "${{ runner.temp }}/eliza-home-smoke-diagnostics/." "$diag_dir/" || true
+          fi
+          if [[ -f "$HOME/.config/Eliza Home/eliza-home-startup.log" ]]; then
+            cp "$HOME/.config/Eliza Home/eliza-home-startup.log" "$diag_dir/startup.log" || true
+          fi
+
+      - name: Collect smoke diagnostics (Windows)
+        if: always() && matrix.platform.os == 'windows'
+        shell: pwsh
+        run: |
+          $diagDir = Join-Path $PWD "packages/home/electrobun/artifacts/smoke-diagnostics/windows"
+          New-Item -ItemType Directory -Force -Path $diagDir | Out-Null
+          $startupLog = Join-Path $env:APPDATA "Eliza Home\eliza-home-startup.log"
+          if (Test-Path $startupLog) {
+            Copy-Item -Path $startupLog -Destination (Join-Path $diagDir "startup.log") -Force
+          }
+          $selfExtractionRoot = Join-Path $env:LOCALAPPDATA "ai.eliza.home\canary\self-extraction"
+          if (Test-Path $selfExtractionRoot) {
+            Get-ChildItem -Path $selfExtractionRoot -Recurse -File -ErrorAction SilentlyContinue |
+              Select-Object FullName,Length,LastWriteTime |
+              Out-File -FilePath (Join-Path $diagDir "self-extraction-files.txt") -Encoding utf8
+          }
+
       - name: Stage Windows setup executables
         if: matrix.platform.os == 'windows'
         shell: pwsh
@@ -567,6 +612,7 @@ jobs:
           }
 
       - name: Upload build artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: home-electrobun-${{ matrix.platform.artifact-name }}
@@ -578,6 +624,7 @@ jobs:
             packages/home/electrobun/artifacts/*-update.json
             packages/home/electrobun/artifacts/*.patch
             packages/home/electrobun/artifacts/*.AppImage
+            packages/home/electrobun/artifacts/smoke-diagnostics/**
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
