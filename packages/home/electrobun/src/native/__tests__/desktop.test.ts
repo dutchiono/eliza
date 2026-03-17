@@ -100,6 +100,8 @@ import * as electrobunBun from "electrobun/bun";
 import { DesktopManager } from "../desktop";
 import * as macEffects from "../mac-window-effects";
 
+const ORIGINAL_PLATFORM = process.platform;
+
 const mockExistsSync = nodeFs.existsSync as ReturnType<typeof vi.fn>;
 const mockWriteFileSync = nodeFs.writeFileSync as ReturnType<typeof vi.fn>;
 const mockMkdirSync = nodeFs.mkdirSync as ReturnType<typeof vi.fn>;
@@ -164,8 +166,9 @@ describe("DesktopManager", () => {
   });
 
   afterEach(() => {
-    // Restore platform to darwin (test host)
-    setPlatform("darwin");
+    // Restore the host platform so this file does not leak fake OS state
+    // into later test files on Linux/Windows CI runners.
+    setPlatform(ORIGINAL_PLATFORM);
     delete process.env.NODE_ENV;
     delete process.env.ELECTROBUN_DEV;
     vi.useRealTimers();
