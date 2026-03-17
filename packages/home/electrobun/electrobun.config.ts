@@ -1,7 +1,10 @@
 import type { ElectrobunConfig } from "electrobun";
 import { existsSync, statSync } from "node:fs";
 
-const macEffectsDylibUrl = new URL("./src/libMacWindowEffects.dylib", import.meta.url);
+const macEffectsDylibUrl = new URL(
+  "./src/libMacWindowEffects.dylib",
+  import.meta.url,
+);
 const hasMacEffectsDylib =
   process.platform === "darwin" &&
   existsSync(macEffectsDylibUrl) &&
