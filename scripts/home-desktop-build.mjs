@@ -167,6 +167,11 @@ function stageDesktopBuild() {
     });
   }
 
+  runBun(["run", "build:core"], {
+    cwd: ROOT,
+    label: "Building @elizaos/core runtime package",
+  });
+
   runBun(["run", "build:dist"], {
     cwd: RUNTIME_DIR,
     label: "Building autonomous runtime bundle",

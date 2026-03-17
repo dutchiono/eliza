@@ -59,7 +59,9 @@ jobs:
 
       - name: Build autonomous runtime bundle
         if: github.event_name == 'push' && github.ref_name == 'dutchiono/eliza-home'
-        run: cd packages/autonomous && bun run build:dist
+        run: |
+          bun run build:core
+          cd packages/autonomous && bun run build:dist
 
       - name: Run tests
         if: github.event_name == 'pull_request' || github.ref_name == 'main'
