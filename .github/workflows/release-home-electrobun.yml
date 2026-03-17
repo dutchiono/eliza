@@ -110,10 +110,7 @@ jobs:
           restore-keys: bun-home-electrobun-validate-
 
       - name: Install root dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
-
-      - name: Run repository postinstall patches
-        run: bun run postinstall
+        run: bun install --frozen-lockfile
 
       - name: Generate shared proto types
         run: bun run generate:types
@@ -181,13 +178,10 @@ jobs:
       - name: Install root dependencies
         run: |
           if [ "${{ matrix.platform.os }}" = "macos" ] && [ "${{ matrix.platform.artifact-name }}" = "macos-x64" ]; then
-            arch -x86_64 bun install --frozen-lockfile --ignore-scripts
+            arch -x86_64 bun install --frozen-lockfile
           else
-            bun install --frozen-lockfile --ignore-scripts
+            bun install --frozen-lockfile
           fi
-
-      - name: Run repository postinstall patches
-        run: bun run postinstall
 
       - name: Generate shared proto types
         run: bun run generate:types

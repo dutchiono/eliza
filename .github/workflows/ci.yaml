@@ -48,46 +48,68 @@ jobs:
         run: bun run generate:types
 
       - name: Create test env file
+        if: github.event_name == 'pull_request' || github.ref_name == 'main'
         run: |
           echo "TEST_DATABASE_CLIENT=pglite" > packages/typescript/.env.test
           echo "NODE_ENV=test" >> packages/typescript/.env.test
 
       - name: Build packages
+        if: github.event_name == 'pull_request' || github.ref_name == 'main'
         run: bun run build
 
+      - name: Build autonomous runtime bundle
+        if: github.event_name == 'push' && github.ref_name == 'dutchiono/eliza-home'
+        run: cd packages/autonomous && bun run build:dist
+
       - name: Run tests
+        if: github.event_name == 'pull_request' || github.ref_name == 'main'
         timeout-minutes: 15
         env:
           NODE_OPTIONS: "--max-old-space-size=2048"
         run: bun run test:core
 
+      - name: Run Home Electrobun tests
+        if: github.event_name == 'push' && github.ref_name == 'dutchiono/eliza-home'
+        run: cd packages/home/electrobun && bun run test
+
+      - name: Run Home release readiness checks
+        if: github.event_name == 'push' && github.ref_name == 'dutchiono/eliza-home'
+        run: bun run release:check:home-electrobun
+
       - name: Run interop (TypeScript) tests
+        if: github.event_name == 'pull_request' || github.ref_name == 'main'
         timeout-minutes: 10
         run: cd packages/interop && bun run test
 
       - name: Setup Python
+        if: github.event_name == 'pull_request' || github.ref_name == 'main'
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
 
       - name: Install Python dependencies
+        if: github.event_name == 'pull_request' || github.ref_name == 'main'
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r packages/python/requirements-dev.lock
           python -m pip install -e packages/python --no-deps
 
       - name: Run Python tests (@elizaos/python)
+        if: github.event_name == 'pull_request' || github.ref_name == 'main'
         timeout-minutes: 10
         run: cd packages/python && python -m pytest -q
 
       - name: Run Python tests (@elizaos/interop python)
+        if: github.event_name == 'pull_request' || github.ref_name == 'main'
         timeout-minutes: 10
         run: cd packages/interop/python && python -m pytest -q
 
       - name: Setup Rust
+        if: github.event_name == 'pull_request' || github.ref_name == 'main'
         uses: dtolnay/rust-toolchain@stable
 
       - name: Run Rust tests (@elizaos/rust)
+        if: github.event_name == 'pull_request' || github.ref_name == 'main'
         timeout-minutes: 10
         run: cd packages/rust && cargo test -q --locked
 
@@ -179,7 +201,12 @@ jobs:
         run: bun run generate:types
 
       - name: Build packages
+        if: github.event_name == 'pull_request' || github.ref_name == 'main'
         run: bun run build
+
+      - name: Stage Home desktop bundle
+        if: github.event_name == 'push' && github.ref_name == 'dutchiono/eliza-home'
+        run: node scripts/home-desktop-build.mjs stage
 
   home-tests-passed:
     name: Tests / All Tests Passed
@@ -248,10 +275,7 @@ jobs:
           restore-keys: bun-home-electrobun-validate-
 
       - name: Install root dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
-
-      - name: Run repository postinstall patches
-        run: bun run postinstall
+        run: bun install --frozen-lockfile
 
       - name: Generate shared proto types
         run: bun run generate:types
@@ -320,13 +344,10 @@ jobs:
       - name: Install root dependencies
         run: |
           if [ "${{ matrix.platform.os }}" = "macos" ] && [ "${{ matrix.platform.artifact-name }}" = "macos-x64" ]; then
-            arch -x86_64 bun install --frozen-lockfile --ignore-scripts
+            arch -x86_64 bun install --frozen-lockfile
           else
-            bun install --frozen-lockfile --ignore-scripts
+            bun install --frozen-lockfile
           fi
-
-      - name: Run repository postinstall patches
-        run: bun run postinstall
 
       - name: Generate shared proto types
         run: bun run generate:types
