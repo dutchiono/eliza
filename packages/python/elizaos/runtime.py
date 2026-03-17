@@ -2102,14 +2102,18 @@ end code: {final_code}
                         expected_codes=per_field_codes,
                         on_chunk=lambda chunk,  # type: ignore[misc]
                         _field,
-                        msg_id=stream_message_id: options.on_stream_chunk(chunk, msg_id)
-                        if options.on_stream_chunk is not None  # type: ignore[truthy-function]
-                        else None,
-                        on_event=lambda event, msg_id=stream_message_id: options.on_stream_event(  # type: ignore[misc]
-                            event, msg_id
-                        )
-                        if options.on_stream_event is not None
-                        else None,
+                        msg_id=stream_message_id: (
+                            options.on_stream_chunk(chunk, msg_id)
+                            if options.on_stream_chunk is not None  # type: ignore[truthy-function]
+                            else None
+                        ),
+                        on_event=lambda event, msg_id=stream_message_id: (
+                            options.on_stream_event(  # type: ignore[misc]
+                                event, msg_id
+                            )
+                            if options.on_stream_event is not None
+                            else None
+                        ),
                         abort_signal=options.abort_signal,
                         has_rich_consumer=has_rich_consumer,
                     )

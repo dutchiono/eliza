@@ -12,7 +12,7 @@
     "fix-deps:restore": "bun scripts/fix-workspace-deps.mjs --restore",
     "ensure-plugin-test-conventions": "bun scripts/ensure-plugin-test-conventions.mjs",
     "ensure-plugin-test-conventions:check": "bun scripts/ensure-plugin-test-conventions.mjs --check",
-    "generate:types": "bun --cwd packages/schemas run generate",
+    "generate:types": "cd packages/schemas && bun run generate",
     "start": "echo 'CLI package not found. Please use elizaos start from a project directory.'",
     "start:debug": "cross-env NODE_NO_WARNINGS=1 LOG_LEVEL=debug elizaos start",
     "build": "turbo run build",
