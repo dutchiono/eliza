@@ -84,12 +84,17 @@ function Test-PackagedRuntimeSurface([string]$RuntimeRoot) {
   $entryCandidates = @(
     (Join-Path $RuntimeRoot "bin.js"),
     (Join-Path $RuntimeRoot "entry.js"),
+    (Join-Path $RuntimeRoot "dist\\bin.js"),
+    (Join-Path $RuntimeRoot "dist\\entry.js"),
     (Join-Path $RuntimeRoot "packages\\autonomous\\src\\bin.js"),
-    (Join-Path $RuntimeRoot "packages\\autonomous\\bin.js")
+    (Join-Path $RuntimeRoot "packages\\autonomous\\bin.js"),
+    (Join-Path $RuntimeRoot "packages\\autonomous\\dist\\bin.js"),
+    (Join-Path $RuntimeRoot "packages\\autonomous\\dist\\entry.js"),
+    (Join-Path $RuntimeRoot "packages\\autonomous\\build\\bin.js")
   )
   $runtimeEntry = $entryCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
   if (-not $runtimeEntry) {
-    throw "No runtime entrypoint found in $RuntimeRoot (checked bin.js, entry.js, packages/autonomous/src/bin.js, packages/autonomous/bin.js)"
+    throw "No runtime entrypoint found in $RuntimeRoot (checked bin.js, entry.js, dist/bin.js, dist/entry.js, packages/autonomous/src/bin.js, packages/autonomous/bin.js, packages/autonomous/dist/bin.js, packages/autonomous/dist/entry.js, packages/autonomous/build/bin.js)"
   }
 
   $requiredPaths = @(
