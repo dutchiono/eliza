@@ -481,37 +481,7 @@ jobs:
       - name: Smoke test packaged Linux app
         if: matrix.platform.os == 'linux'
         run: |
-          archive="$(
-            find packages/home/electrobun/artifacts packages/home/electrobun/build \
-              -type f \( -name '*.tar.gz' -o -name '*.tar.zst' \) 2>/dev/null \
-              | sort \
-              | head -1
-          )"
-          if [[ -z "$archive" ]]; then
-            appimage="$(
-              find packages/home/electrobun/artifacts packages/home/electrobun/build \
-                -type f -name '*.AppImage' 2>/dev/null \
-                | sort \
-                | head -1
-            )"
-            if [[ -n "$appimage" && -s "$appimage" ]]; then
-              echo "Linux smoke check passed with AppImage artifact: $appimage"
-              exit 0
-            fi
-            echo "::error::No Linux package archive or AppImage found in packages/home/electrobun/artifacts or packages/home/electrobun/build"
-            exit 1
-          fi
-
-          if [[ "$archive" == *.tar.zst ]]; then
-            list_cmd=(tar --zstd -tf "$archive")
-          else
-            list_cmd=(tar -tzf "$archive")
-          fi
-
-          mapfile -t archive_members < <("${list_cmd[@]}")
-          printf '%s\n' "${archive_members[@]}" | grep -Eq '(^|/)(renderer/)?index\.html$'
-          printf '%s\n' "${archive_members[@]}" | grep -Eq '(^|/)(renderer/)?assets/.+\.(js|css)$'
-          printf '%s\n' "${archive_members[@]}" | grep -Eq '(^|/)home-dist/.+\.(js|mjs|cjs)$'
+          bash packages/home/electrobun/scripts/smoke-test-linux.sh
 
       - name: Collect smoke diagnostics (Linux)
         if: always() && matrix.platform.os == 'linux'

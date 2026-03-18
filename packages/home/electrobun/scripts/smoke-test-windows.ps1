@@ -43,6 +43,80 @@ function Expand-PackagedTarball([string]$ArchivePath, [string]$DestinationPath) 
   & $tarCommand -xf $ArchivePath -C $DestinationPath
 }
 
+function Resolve-RuntimeRootFromLauncher([System.IO.FileInfo]$Launcher) {
+  if (-not $Launcher) {
+    return $null
+  }
+
+  $launcherDir = Split-Path -Parent $Launcher.FullName
+  $appRoot = Split-Path -Parent $launcherDir
+  $candidates = @(
+    (Join-Path $appRoot "home-dist"),
+    (Join-Path $appRoot "resources\\app\\home-dist"),
+    (Join-Path $launcherDir "..\\resources\\app\\home-dist")
+  )
+
+  foreach ($candidate in $candidates) {
+    $resolved = $null
+    try {
+      $resolved = [System.IO.Path]::GetFullPath($candidate)
+    } catch {
+      $resolved = $candidate
+    }
+
+    if (Test-Path $resolved) {
+      return $resolved
+    }
+  }
+
+  return $null
+}
+
+function Test-PackagedRuntimeSurface([string]$RuntimeRoot) {
+  if ([string]::IsNullOrWhiteSpace($RuntimeRoot)) {
+    throw "Runtime root is empty."
+  }
+
+  if (-not (Test-Path $RuntimeRoot)) {
+    throw "Runtime root does not exist: $RuntimeRoot"
+  }
+
+  $entryCandidates = @(
+    (Join-Path $RuntimeRoot "bin.js"),
+    (Join-Path $RuntimeRoot "entry.js"),
+    (Join-Path $RuntimeRoot "packages\\autonomous\\src\\bin.js"),
+    (Join-Path $RuntimeRoot "packages\\autonomous\\bin.js")
+  )
+  $runtimeEntry = $entryCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+  if (-not $runtimeEntry) {
+    throw "No runtime entrypoint found in $RuntimeRoot (checked bin.js, entry.js, packages/autonomous/src/bin.js, packages/autonomous/bin.js)"
+  }
+
+  $requiredPaths = @(
+    (Join-Path $RuntimeRoot "node_modules\\@elizaos\\core\\package.json")
+  )
+  foreach ($requiredPath in $requiredPaths) {
+    if (-not (Test-Path $requiredPath)) {
+      throw "Missing required packaged runtime dependency: $requiredPath"
+    }
+  }
+
+  $resolveScript = @'
+const { createRequire } = require("node:module");
+const path = require("node:path");
+const runtimeRoot = process.argv[1];
+const req = createRequire(path.join(runtimeRoot, "package.json"));
+for (const moduleName of ["@elizaos/core/package.json"]) {
+  process.stdout.write(`${moduleName} => ${req.resolve(moduleName)}\n`);
+}
+'@
+
+  & node -e $resolveScript $RuntimeRoot
+  if ($LASTEXITCODE -ne 0) {
+    throw "Runtime module resolution failed from packaged runtime root: $RuntimeRoot"
+  }
+}
+
 function Write-ReusableLauncherPath([System.IO.FileInfo]$Launcher, [string]$TemporaryRoot) {
   if (-not $Launcher -or [string]::IsNullOrWhiteSpace($persistLauncherPathFile)) {
     return $Launcher
@@ -159,6 +233,7 @@ $installer = $null
 $installerProcess = $null
 $launcherProcess = $null
 $launcherStarted = $false
+$runtimeValidated = $false
 
 if ($resolvedBuildDir) {
   $launcher = Find-Launcher $resolvedBuildDir
@@ -198,6 +273,14 @@ if (-not $launcher) {
   if ($launcher) {
     $launcher = Write-ReusableLauncherPath -Launcher $launcher -TemporaryRoot $tempExtractDir
     Write-Host "Using $launcherSource launcher: $($launcher.FullName)"
+    $runtimeRoot = Resolve-RuntimeRootFromLauncher -Launcher $launcher
+    if ($runtimeRoot) {
+      Write-Host "Validating packaged runtime at: $runtimeRoot"
+      Test-PackagedRuntimeSurface -RuntimeRoot $runtimeRoot
+      $runtimeValidated = $true
+    } else {
+      Write-Warning "Could not resolve runtime root from launcher path before startup. Continuing to launch for extraction/handoff."
+    }
     $launcherDir = Split-Path -Parent $launcher.FullName
     $launcherProcess = Start-Process -FilePath $launcher.FullName -WorkingDirectory $launcherDir -PassThru
     $launcherStarted = $true
@@ -228,6 +311,14 @@ if (-not $launcher) {
 } else {
   $launcher = Write-ReusableLauncherPath -Launcher $launcher -TemporaryRoot $tempExtractDir
   Write-Host "Using $launcherSource launcher: $($launcher.FullName)"
+  $runtimeRoot = Resolve-RuntimeRootFromLauncher -Launcher $launcher
+  if ($runtimeRoot) {
+    Write-Host "Validating packaged runtime at: $runtimeRoot"
+    Test-PackagedRuntimeSurface -RuntimeRoot $runtimeRoot
+    $runtimeValidated = $true
+  } else {
+    Write-Warning "Could not resolve runtime root from launcher path before startup. Continuing to launch for extraction/handoff."
+  }
   $launcherDir = Split-Path -Parent $launcher.FullName
   $launcherProcess = Start-Process -FilePath $launcher.FullName -WorkingDirectory $launcherDir -PassThru
   $launcherStarted = $true
@@ -243,6 +334,15 @@ try {
       if ($launcher) {
         $launcher = Write-ReusableLauncherPath -Launcher $launcher -TemporaryRoot $null
         Write-Host "Found extracted launcher: $($launcher.FullName)"
+      }
+    }
+
+    if ($launcher -and -not $runtimeValidated) {
+      $runtimeRoot = Resolve-RuntimeRootFromLauncher -Launcher $launcher
+      if ($runtimeRoot) {
+        Write-Host "Validating packaged runtime at: $runtimeRoot"
+        Test-PackagedRuntimeSurface -RuntimeRoot $runtimeRoot
+        $runtimeValidated = $true
       }
     }
 

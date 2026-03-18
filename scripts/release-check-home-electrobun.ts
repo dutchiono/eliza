@@ -10,6 +10,7 @@ const requiredPaths = [
   "scripts/write-build-info.ts",
   ".github/workflows/release-home-electrobun.yml",
   "ELIZA_HOME_ELECTROBUN_RUNBOOK.md",
+  "packages/home/electrobun/scripts/smoke-test-linux.sh",
 ];
 
 const requiredWorkflowSnippets = [
@@ -19,6 +20,7 @@ const requiredWorkflowSnippets = [
   "packages/home/electrobun/artifacts",
   "smoke-test-windows.ps1",
   "smoke-test.sh",
+  "smoke-test-linux.sh",
   "softprops/action-gh-release@v2",
 ];
 
