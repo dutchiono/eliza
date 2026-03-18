@@ -513,7 +513,10 @@ jobs:
           MILADY_DISABLE_LOCAL_EMBEDDINGS: "1"
           MILADY_TEST_WINDOWS_LAUNCHER_DIR: ${{ runner.temp }}\eliza-home-windows-ui-launcher
           MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE: ${{ runner.temp }}\eliza-home-windows-ui-launcher.txt
-        run: pwsh -File packages/home/electrobun/scripts/smoke-test-windows.ps1
+        run: |
+          pwsh -File packages/home/electrobun/scripts/smoke-test-windows.ps1 `
+            -PreferInstaller `
+            -ExpectedInstallDir (Join-Path $env:LOCALAPPDATA "Programs\Eliza Home")
 
       - name: Smoke test packaged macOS app
         if: matrix.platform.os == 'macos'
@@ -588,19 +591,29 @@ jobs:
           $artifactsDir = Join-Path $PWD "packages/home/electrobun/artifacts"
           $setupExecutables = Get-ChildItem -Path "packages/home/electrobun/build" -Recurse -File -Filter "*Setup*.exe" -ErrorAction SilentlyContinue
           if (-not $setupExecutables) { Write-Error "No Windows setup executable found under packages/home/electrobun/build"; exit 1 }
+          $canonicalSetup = $setupExecutables |
+            Where-Object { $_.Name -like "*win*x64*Setup*.exe" } |
+            Sort-Object Length -Descending |
+            Select-Object -First 1
+          if (-not $canonicalSetup) {
+            $canonicalSetup = $setupExecutables | Sort-Object Length -Descending | Select-Object -First 1
+          }
           New-Item -ItemType Directory -Force -Path $artifactsDir | Out-Null
-          foreach ($setupExecutable in $setupExecutables) { Copy-Item $setupExecutable.FullName -Destination $artifactsDir -Force }
+          Copy-Item $canonicalSetup.FullName -Destination $artifactsDir -Force
 
       - name: Compress Windows artifacts before upload
         if: matrix.platform.os == 'windows'
         shell: pwsh
         run: |
           $artifactsDir = Join-Path $PWD "packages/home/electrobun/artifacts"
-          Get-ChildItem -Path $artifactsDir -Filter "*.exe" | ForEach-Object {
+          Get-ChildItem -Path $artifactsDir -Filter "*win*x64*Setup*.exe" | ForEach-Object {
             $zipPath = $_.FullName + ".zip"
             Compress-Archive -Path $_.FullName -DestinationPath $zipPath -CompressionLevel Optimal
             Remove-Item $_.FullName -Force
           }
+          Get-ChildItem -Path $artifactsDir -Filter "*.zip" |
+            Where-Object { $_.Name -notlike "*win*x64*Setup*.zip" } |
+            Remove-Item -Force
 
       - name: Upload build artifacts
         if: always()
@@ -609,7 +622,7 @@ jobs:
           name: home-electrobun-${{ matrix.platform.artifact-name }}
           path: |
             packages/home/electrobun/artifacts/*.dmg
-            packages/home/electrobun/artifacts/*Setup*.zip
+            packages/home/electrobun/artifacts/*win*x64*Setup*.zip
             packages/home/electrobun/artifacts/*.tar.zst
             packages/home/electrobun/artifacts/*.tar.gz
             packages/home/electrobun/artifacts/*-update.json
@@ -642,16 +655,17 @@ jobs:
       - name: Collect public release files
         run: |
           mkdir -p release-files
-          find release-artifacts -type f \( -name "*.dmg" -o -name "*Setup*.zip" -o -name "*.tar.gz" -o -name "*.AppImage" \) -exec cp {} release-files/ \; 2>/dev/null || true
+          find release-artifacts -type f \( -name "*.dmg" -o -name "*win*x64*Setup*.zip" -o -name "*.tar.gz" -o -name "*.AppImage" \) -exec cp {} release-files/ \; 2>/dev/null || true
           ls -lh release-files/ 2>/dev/null || echo "None"
 
       - name: Validate Windows public installer bundle
         shell: bash
         run: |
           shopt -s nullglob
-          windows_setup_zips=(release-files/*Setup*.zip)
-          if [ ${#windows_setup_zips[@]} -eq 0 ]; then
-            echo "::error::Missing Windows setup zip in release-files."
+          windows_setup_zips=(release-files/*win*x64*Setup*.zip)
+          if [ ${#windows_setup_zips[@]} -ne 1 ]; then
+            echo "::error::Expected exactly one canonical Windows setup zip in release-files, found ${#windows_setup_zips[@]}."
+            ls -lh release-files || true
             exit 1
           fi
           for f in "${windows_setup_zips[@]}"; do

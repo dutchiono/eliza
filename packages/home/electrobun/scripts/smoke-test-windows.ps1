@@ -2,7 +2,9 @@ param(
   [string]$ArtifactsDir = (Join-Path $PSScriptRoot "..\\artifacts"),
   [string]$BuildDir = (Join-Path $PSScriptRoot "..\\build"),
   [int]$BackendPort = 2138,
-  [int]$TimeoutSeconds = 240
+  [int]$TimeoutSeconds = 240,
+  [switch]$PreferInstaller,
+  [string]$ExpectedInstallDir = (Join-Path $env:LOCALAPPDATA "Programs\\Eliza Home")
 )
 
 $ErrorActionPreference = "Stop"
@@ -21,6 +23,51 @@ $selfExtractionRoot = Join-Path $env:LOCALAPPDATA "ai.eliza.home\\canary\\self-e
 $tempExtractDir = Join-Path $env:RUNNER_TEMP ("eliza-home-windows-smoke-" + [Guid]::NewGuid().ToString("N"))
 $persistLauncherDir = $env:MILADY_TEST_WINDOWS_LAUNCHER_DIR
 $persistLauncherPathFile = $env:MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE
+$startMenuProgramsDir = Join-Path $env:APPDATA "Microsoft\\Windows\\Start Menu\\Programs"
+
+function Resolve-ShortcutTarget([string]$ShortcutPath) {
+  $shell = New-Object -ComObject WScript.Shell
+  $shortcut = $shell.CreateShortcut($ShortcutPath)
+  return $shortcut.TargetPath
+}
+
+function Assert-InstallerContract([string]$InstallRoot, [string]$StartMenuRoot) {
+  if (-not (Test-Path $InstallRoot)) {
+    throw "Expected install directory does not exist: $InstallRoot"
+  }
+
+  if (-not (Test-Path $StartMenuRoot)) {
+    throw "Start Menu programs directory does not exist: $StartMenuRoot"
+  }
+
+  $linkCandidates = Get-ChildItem -Path $StartMenuRoot -Recurse -File -Filter "*.lnk" -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -like "Eliza Home*.lnk" } |
+    Sort-Object LastWriteTime -Descending
+
+  if (-not $linkCandidates) {
+    throw "Expected Eliza Home Start Menu shortcut was not created."
+  }
+
+  foreach ($link in $linkCandidates) {
+    $targetPath = Resolve-ShortcutTarget -ShortcutPath $link.FullName
+    if ([string]::IsNullOrWhiteSpace($targetPath) -or -not (Test-Path $targetPath)) {
+      continue
+    }
+
+    $normalizedInstallRoot = [System.IO.Path]::GetFullPath($InstallRoot).TrimEnd("\")
+    $normalizedTargetPath = [System.IO.Path]::GetFullPath($targetPath)
+    if (
+      $normalizedTargetPath.StartsWith($normalizedInstallRoot, [System.StringComparison]::OrdinalIgnoreCase) -and
+      $normalizedTargetPath.ToLowerInvariant().EndsWith(".exe")
+    ) {
+      Write-Host "Installer contract satisfied. Start Menu shortcut: $($link.FullName)"
+      Write-Host "Resolved installed executable: $normalizedTargetPath"
+      return $normalizedTargetPath
+    }
+  }
+
+  throw "No Eliza Home Start Menu shortcut resolved to an installed executable under $InstallRoot"
+}
 
 function Find-Launcher([string]$Root) {
   if (-not (Test-Path $Root)) {
@@ -250,7 +297,34 @@ if (-not $launcher) {
   }
 }
 
-if (-not $launcher) {
+$installer = Get-ChildItem -Path $resolvedArtifactsDir -File -Filter "*Setup*.exe" -ErrorAction SilentlyContinue |
+  Sort-Object Length -Descending |
+  Select-Object -First 1
+if (-not $installer) {
+  $installerZip = Get-ChildItem -Path $resolvedArtifactsDir -File -Filter "*Setup*.zip" -ErrorAction SilentlyContinue |
+    Sort-Object Length -Descending |
+    Select-Object -First 1
+  if ($installerZip) {
+    New-Item -ItemType Directory -Force -Path $tempExtractDir | Out-Null
+    Expand-Archive -Path $installerZip.FullName -DestinationPath $tempExtractDir -Force
+    $installer = Get-ChildItem -Path $tempExtractDir -Recurse -File -Filter "*Setup*.exe" -ErrorAction SilentlyContinue |
+      Sort-Object Length -Descending |
+      Select-Object -First 1
+  }
+}
+
+if ($PreferInstaller -and $installer) {
+  Write-Host "Using installer (preferred): $($installer.FullName)"
+  $installerProcess = Start-Process -FilePath $installer.FullName -ArgumentList @("/S", "/D=$ExpectedInstallDir") -PassThru -Wait
+  if ($installerProcess.ExitCode -ne 0) {
+    throw "Windows installer exited with non-zero code: $($installerProcess.ExitCode)"
+  }
+  $installedExe = Assert-InstallerContract -InstallRoot $ExpectedInstallDir -StartMenuRoot $startMenuProgramsDir
+  $launcher = $null
+  $launcherSource = "installed executable"
+  $launcherProcess = Start-Process -FilePath $installedExe -WorkingDirectory (Split-Path -Parent $installedExe) -PassThru
+  $launcherStarted = $true
+} elseif (-not $launcher) {
   $packagedTarball = Get-ChildItem -Path $resolvedArtifactsDir -File -Filter "*.tar.zst" -ErrorAction SilentlyContinue |
     Sort-Object LastWriteTime -Descending |
     Select-Object -First 1
@@ -286,28 +360,18 @@ if (-not $launcher) {
     $launcherProcess = Start-Process -FilePath $launcher.FullName -WorkingDirectory $launcherDir -PassThru
     $launcherStarted = $true
   } else {
-    $installer = Get-ChildItem -Path $resolvedArtifactsDir -File -Filter "*Setup*.exe" -ErrorAction SilentlyContinue |
-      Select-Object -First 1
-
-    if (-not $installer) {
-      $installerZip = Get-ChildItem -Path $resolvedArtifactsDir -File -Filter "*Setup*.zip" -ErrorAction SilentlyContinue |
-        Select-Object -First 1
-      if (-not $installerZip) {
-        throw "No launcher.exe, packaged .tar.zst, installer .exe, or installer .zip found under $resolvedArtifactsDir"
-      }
-
-      New-Item -ItemType Directory -Force -Path $tempExtractDir | Out-Null
-      Expand-Archive -Path $installerZip.FullName -DestinationPath $tempExtractDir -Force
-      $installer = Get-ChildItem -Path $tempExtractDir -Recurse -File -Filter "*Setup*.exe" -ErrorAction SilentlyContinue |
-        Select-Object -First 1
-    }
-
     if (-not $installer) {
       throw "No installer executable found for Windows smoke test."
     }
 
     Write-Host "Using installer: $($installer.FullName)"
-    $installerProcess = Start-Process -FilePath $installer.FullName -WorkingDirectory (Split-Path -Parent $installer.FullName) -PassThru
+    $installerProcess = Start-Process -FilePath $installer.FullName -WorkingDirectory (Split-Path -Parent $installer.FullName) -ArgumentList @("/S", "/D=$ExpectedInstallDir") -PassThru -Wait
+    if ($installerProcess.ExitCode -ne 0) {
+      throw "Windows installer exited with non-zero code: $($installerProcess.ExitCode)"
+    }
+    $installedExe = Assert-InstallerContract -InstallRoot $ExpectedInstallDir -StartMenuRoot $startMenuProgramsDir
+    $launcherProcess = Start-Process -FilePath $installedExe -WorkingDirectory (Split-Path -Parent $installedExe) -PassThru
+    $launcherStarted = $true
   }
 } else {
   $launcher = Write-ReusableLauncherPath -Launcher $launcher -TemporaryRoot $tempExtractDir
