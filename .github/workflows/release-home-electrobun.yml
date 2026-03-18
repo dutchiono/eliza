@@ -460,14 +460,17 @@ jobs:
         shell: pwsh
         env:
           MILADY_DISABLE_LOCAL_EMBEDDINGS: "1"
-          MILADY_TEST_WINDOWS_LAUNCHER_DIR: ${{ runner.temp }}\eliza-home-windows-ui-launcher
-          MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE: ${{ runner.temp }}\eliza-home-windows-ui-launcher.txt
+          MILADY_TEST_WINDOWS_SMOKE_TEMP_ROOT: ${{ runner.temp }}\eh
+          MILADY_TEST_WINDOWS_LAUNCHER_DIR: ${{ runner.temp }}\eh\launcher
+          MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE: ${{ runner.temp }}\eh\launcher.txt
+          MILADY_TEST_WINDOWS_SMOKE_LOG_FILE: ${{ runner.temp }}\eh\smoke-events.jsonl
         run: |
+          Remove-Item $env:MILADY_TEST_WINDOWS_SMOKE_TEMP_ROOT -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item $env:MILADY_TEST_WINDOWS_LAUNCHER_DIR -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item $env:MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE -Force -ErrorAction SilentlyContinue
+          Remove-Item $env:MILADY_TEST_WINDOWS_SMOKE_LOG_FILE -Force -ErrorAction SilentlyContinue
           pwsh -File packages/home/electrobun/scripts/smoke-test-windows.ps1 `
-            -PreferInstaller `
-            -ExpectedInstallDir (Join-Path $env:LOCALAPPDATA "Programs\Eliza Home")
+            -PreferInstaller
 
       - name: Smoke test packaged macOS app
         if: matrix.platform.os == 'macos'
@@ -531,8 +534,11 @@ jobs:
           $selfExtractionRoot = Join-Path $env:LOCALAPPDATA "ai.eliza.home\canary\self-extraction"
           if (Test-Path $selfExtractionRoot) {
             Get-ChildItem -Path $selfExtractionRoot -Recurse -File -ErrorAction SilentlyContinue |
-              Select-Object FullName,Length,LastWriteTime |
+              Select-Object -ExpandProperty FullName |
               Out-File -FilePath (Join-Path $diagDir "self-extraction-files.txt") -Encoding utf8
+          }
+          if ($env:MILADY_TEST_WINDOWS_SMOKE_LOG_FILE -and (Test-Path $env:MILADY_TEST_WINDOWS_SMOKE_LOG_FILE)) {
+            Copy-Item -Path $env:MILADY_TEST_WINDOWS_SMOKE_LOG_FILE -Destination (Join-Path $diagDir "smoke-events.jsonl") -Force
           }
 
       - name: Stage Windows setup executables

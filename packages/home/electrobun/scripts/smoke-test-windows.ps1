@@ -7,6 +7,61 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
+$smokeEventLogFile = $env:MILADY_TEST_WINDOWS_SMOKE_LOG_FILE
+
+function Write-SmokeEvent([string]$Type, [hashtable]$Data = @{}) {
+  $payload = [ordered]@{
+    timestamp = (Get-Date).ToString("o")
+    type = $Type
+  }
+  foreach ($entry in $Data.GetEnumerator()) {
+    $payload[$entry.Key] = $entry.Value
+  }
+  $json = $payload | ConvertTo-Json -Compress -Depth 8
+  Write-Host ("[smoke] " + $json)
+  if (-not [string]::IsNullOrWhiteSpace($smokeEventLogFile)) {
+    $logParent = Split-Path -Parent $smokeEventLogFile
+    if (-not [string]::IsNullOrWhiteSpace($logParent)) {
+      New-Item -ItemType Directory -Force -Path $logParent | Out-Null
+    }
+    Add-Content -Path $smokeEventLogFile -Value $json -Encoding utf8
+  }
+}
+
+function Get-CanonicalPath([string]$Value) {
+  if ([string]::IsNullOrWhiteSpace($Value)) {
+    return $null
+  }
+  try {
+    return [System.IO.Path]::GetFullPath($Value)
+  } catch {
+    return $Value
+  }
+}
+
+function Write-PathDiagnostics([string]$Label, [string]$PathValue) {
+  $resolvedPath = Get-CanonicalPath $PathValue
+  if ([string]::IsNullOrWhiteSpace($resolvedPath)) {
+    return
+  }
+
+  $pathLength = $resolvedPath.Length
+  $riskLevel = if ($pathLength -ge 250) {
+    "high"
+  } elseif ($pathLength -ge 220) {
+    "warning"
+  } else {
+    "ok"
+  }
+
+  Write-SmokeEvent "path.diagnostic" @{
+    label = $Label
+    path = $resolvedPath
+    length = $pathLength
+    risk = $riskLevel
+  }
+}
 
 $resolvedArtifactsDir = (Resolve-Path $ArtifactsDir).Path
 $resolvedBuildDir = $null
@@ -19,9 +74,34 @@ try {
 # Unix-style ~/.config/Eliza Home path used on macOS/Linux.
 $startupLog = Join-Path $env:APPDATA "Eliza Home\\eliza-home-startup.log"
 $selfExtractionRoot = Join-Path $env:LOCALAPPDATA "ai.eliza.home\\canary\\self-extraction"
-$tempExtractDir = Join-Path $env:RUNNER_TEMP ("eliza-home-windows-smoke-" + [Guid]::NewGuid().ToString("N"))
+$smokeTempRoot = if ([string]::IsNullOrWhiteSpace($env:MILADY_TEST_WINDOWS_SMOKE_TEMP_ROOT)) {
+  if ([string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) { $env:TEMP } else { $env:RUNNER_TEMP }
+} else {
+  $env:MILADY_TEST_WINDOWS_SMOKE_TEMP_ROOT
+}
+$smokeTempRoot = Get-CanonicalPath $smokeTempRoot
+$tempExtractDir = Join-Path $smokeTempRoot ("ehs-" + [Guid]::NewGuid().ToString("N").Substring(0, 8))
 $persistLauncherDir = $env:MILADY_TEST_WINDOWS_LAUNCHER_DIR
 $persistLauncherPathFile = $env:MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE
+$script:runtimeRootCandidatesTried = [System.Collections.Generic.List[string]]::new()
+$probeAttempts = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+function Get-StagedLauncherFromPathFile([string]$PathFile) {
+  if ([string]::IsNullOrWhiteSpace($PathFile) -or -not (Test-Path $PathFile)) {
+    return $null
+  }
+
+  try {
+    $candidate = (Get-Content -Path $PathFile -ErrorAction Stop | Select-Object -First 1).Trim()
+    if (-not [string]::IsNullOrWhiteSpace($candidate) -and (Test-Path $candidate)) {
+      return Get-Item $candidate
+    }
+  } catch {
+    Write-Warning "Failed to read persisted launcher path file ($PathFile): $($_.Exception.Message)"
+  }
+
+  return $null
+}
+
 function Find-Launcher([string]$Root) {
   if (-not (Test-Path $Root)) {
     return $null
@@ -62,6 +142,9 @@ function Resolve-RuntimeRootFromLauncher([System.IO.FileInfo]$Launcher) {
       $resolved = [System.IO.Path]::GetFullPath($candidate)
     } catch {
       $resolved = $candidate
+    }
+    if (-not [string]::IsNullOrWhiteSpace($resolved) -and -not $script:runtimeRootCandidatesTried.Contains($resolved)) {
+      $script:runtimeRootCandidatesTried.Add($resolved) | Out-Null
     }
 
     if (Test-Path $resolved) {
@@ -225,6 +308,20 @@ Write-Host "Artifacts dir: $resolvedArtifactsDir"
 if ($resolvedBuildDir) {
   Write-Host "Build dir: $resolvedBuildDir"
 }
+Write-SmokeEvent "smoke.contract" @{
+  installerRequired = [bool]$PreferInstaller
+  launcherLivenessRequired = $true
+  backendHealthRequired = $true
+  preflightFatal = $false
+}
+Write-PathDiagnostics -Label "artifacts_dir" -PathValue $resolvedArtifactsDir
+if ($resolvedBuildDir) {
+  Write-PathDiagnostics -Label "build_dir" -PathValue $resolvedBuildDir
+}
+Write-PathDiagnostics -Label "self_extraction_root" -PathValue $selfExtractionRoot
+Write-PathDiagnostics -Label "smoke_temp_root" -PathValue $smokeTempRoot
+Write-PathDiagnostics -Label "startup_log" -PathValue $startupLog
+Write-PathDiagnostics -Label "launcher_path_file" -PathValue $persistLauncherPathFile
 
 Stop-ElizaHomeProcesses
 $env:ELECTROBUN_CONSOLE = "1"
@@ -242,6 +339,7 @@ $launcherProcess = $null
 $launcherStarted = $false
 $runtimeValidated = $false
 $installerExitWarned = $false
+$launcherSeenRunning = $false
 
 if ($resolvedBuildDir) {
   $launcher = Find-Launcher $resolvedBuildDir
@@ -260,23 +358,37 @@ if (-not $launcher) {
 $installer = Get-ChildItem -Path $resolvedArtifactsDir -File -Filter "*Setup*.exe" -ErrorAction SilentlyContinue |
   Sort-Object Length -Descending |
   Select-Object -First 1
+if ($installer) {
+  Write-PathDiagnostics -Label "installer_exe" -PathValue $installer.FullName
+}
 if (-not $installer) {
   $installerZip = Get-ChildItem -Path $resolvedArtifactsDir -File -Filter "*Setup*.zip" -ErrorAction SilentlyContinue |
     Sort-Object Length -Descending |
     Select-Object -First 1
   if ($installerZip) {
+    Write-PathDiagnostics -Label "installer_zip" -PathValue $installerZip.FullName
     New-Item -ItemType Directory -Force -Path $tempExtractDir | Out-Null
     Expand-Archive -Path $installerZip.FullName -DestinationPath $tempExtractDir -Force
     $installer = Get-ChildItem -Path $tempExtractDir -Recurse -File -Filter "*Setup*.exe" -ErrorAction SilentlyContinue |
       Sort-Object Length -Descending |
       Select-Object -First 1
+    if ($installer) {
+      Write-PathDiagnostics -Label "installer_from_zip" -PathValue $installer.FullName
+    }
   }
+}
+Write-SmokeEvent "preflight.inventory" @{
+  hasBuildLauncher = [bool]($resolvedBuildDir -and (Find-Launcher $resolvedBuildDir))
+  hasArtifactsLauncher = [bool](Find-Launcher $resolvedArtifactsDir)
+  hasInstaller = [bool]$installer
+  selfExtractionExists = [bool](Test-Path $selfExtractionRoot)
 }
 
 if ($PreferInstaller -and $installer) {
   Write-Host "Using installer (preferred): $($installer.FullName)"
   # The electrobun Windows installer is a Zig-based self-extractor, not an NSIS installer.
   # It does not accept /S or /D= flags. Start it and poll for extraction + health.
+  Write-SmokeEvent "installer.start" @{ path = $installer.FullName; source = "preferred" }
   $installerProcess = Start-Process -FilePath $installer.FullName -WorkingDirectory (Split-Path -Parent $installer.FullName) -PassThru
   $launcher = $null
   $launcherSource = "installed via self-extractor"
@@ -303,9 +415,15 @@ if ($PreferInstaller -and $installer) {
 
   if ($launcher) {
     $launcher = Write-ReusableLauncherPath -Launcher $launcher -TemporaryRoot $tempExtractDir
+    Write-SmokeEvent "launcher.discovery" @{ source = $launcherSource; path = $launcher.FullName }
     Write-Host "Using $launcherSource launcher: $($launcher.FullName)"
     $runtimeRoot = Resolve-RuntimeRootFromLauncher -Launcher $launcher
     if ($runtimeRoot) {
+      Write-SmokeEvent "runtime.discovery" @{
+        source = $launcherSource
+        runtimeRoot = $runtimeRoot
+        candidatesTried = @($script:runtimeRootCandidatesTried)
+      }
       Write-Host "Validating packaged runtime at: $runtimeRoot"
       Test-PackagedRuntimeSurface -RuntimeRoot $runtimeRoot
       $runtimeValidated = $true
@@ -322,15 +440,22 @@ if ($PreferInstaller -and $installer) {
 
     Write-Host "Using installer: $($installer.FullName)"
     # Electrobun Windows installer is a Zig self-extractor; no NSIS /S /D= flags.
+    Write-SmokeEvent "installer.start" @{ path = $installer.FullName; source = "fallback" }
     $installerProcess = Start-Process -FilePath $installer.FullName -WorkingDirectory (Split-Path -Parent $installer.FullName) -PassThru
     $launcher = $null
     $launcherSource = "installed via self-extractor"
   }
 } else {
   $launcher = Write-ReusableLauncherPath -Launcher $launcher -TemporaryRoot $tempExtractDir
+  Write-SmokeEvent "launcher.discovery" @{ source = $launcherSource; path = $launcher.FullName }
   Write-Host "Using $launcherSource launcher: $($launcher.FullName)"
   $runtimeRoot = Resolve-RuntimeRootFromLauncher -Launcher $launcher
   if ($runtimeRoot) {
+    Write-SmokeEvent "runtime.discovery" @{
+      source = $launcherSource
+      runtimeRoot = $runtimeRoot
+      candidatesTried = @($script:runtimeRootCandidatesTried)
+    }
     Write-Host "Validating packaged runtime at: $runtimeRoot"
     Test-PackagedRuntimeSurface -RuntimeRoot $runtimeRoot
     $runtimeValidated = $true
@@ -354,20 +479,55 @@ try {
       $installerProcess.ExitCode -ne 0
     ) {
       Write-Warning "Windows installer exited with non-zero code: $($installerProcess.ExitCode). Continuing with launcher/health validation."
+      Write-SmokeEvent "installer.exit" @{
+        code = $installerProcess.ExitCode
+        warning = $true
+      }
       $installerExitWarned = $true
+    }
+
+    if (-not $launcher) {
+      $launcher = Get-StagedLauncherFromPathFile -PathFile $persistLauncherPathFile
+      if ($launcher) {
+        $launcherSource = "persisted-launcher-path"
+        Write-SmokeEvent "launcher.discovery" @{ source = $launcherSource; path = $launcher.FullName }
+      }
     }
 
     if (-not $launcher) {
       $launcher = Find-Launcher $selfExtractionRoot
       if ($launcher) {
         $launcher = Write-ReusableLauncherPath -Launcher $launcher -TemporaryRoot $null
+        $launcherSource = "self-extraction"
+        Write-SmokeEvent "launcher.discovery" @{ source = $launcherSource; path = $launcher.FullName }
         Write-Host "Found extracted launcher: $($launcher.FullName)"
+      }
+    }
+
+    if (-not $launcher -and $resolvedBuildDir) {
+      $launcher = Find-Launcher $resolvedBuildDir
+      if ($launcher) {
+        $launcherSource = "build-fallback"
+        Write-SmokeEvent "launcher.discovery" @{ source = $launcherSource; path = $launcher.FullName }
+      }
+    }
+
+    if (-not $launcher) {
+      $launcher = Find-Launcher $resolvedArtifactsDir
+      if ($launcher) {
+        $launcherSource = "artifacts-fallback"
+        Write-SmokeEvent "launcher.discovery" @{ source = $launcherSource; path = $launcher.FullName }
       }
     }
 
     if ($launcher -and -not $runtimeValidated) {
       $runtimeRoot = Resolve-RuntimeRootFromLauncher -Launcher $launcher
       if ($runtimeRoot) {
+        Write-SmokeEvent "runtime.discovery" @{
+          source = $launcherSource
+          runtimeRoot = $runtimeRoot
+          candidatesTried = @($script:runtimeRootCandidatesTried)
+        }
         Write-Host "Validating packaged runtime at: $runtimeRoot"
         Test-PackagedRuntimeSurface -RuntimeRoot $runtimeRoot
         $runtimeValidated = $true
@@ -385,7 +545,11 @@ try {
       $launcherDir = Split-Path -Parent $launcher.FullName
       $launcherProcess = Start-Process -FilePath $launcher.FullName -WorkingDirectory $launcherDir -PassThru
       $launcherStarted = $true
+      Write-SmokeEvent "launcher.start" @{ path = $launcher.FullName; source = $launcherSource }
       Write-Host "Started extracted launcher: $($launcher.FullName)"
+    }
+    if (Get-Process -Name "launcher" -ErrorAction SilentlyContinue) {
+      $launcherSeenRunning = $true
     }
 
     if (Test-Path $startupLog) {
@@ -399,10 +563,12 @@ try {
 
     foreach ($port in Get-ObservedBackendPorts $BackendPort) {
       foreach ($path in @("/api/health", "/api/auth/status")) {
+        $probeAttempts.Add("$port$path") | Out-Null
         try {
           $response = Invoke-WebRequest -Uri "http://127.0.0.1:$port$path" -UseBasicParsing -TimeoutSec 2
           if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 300) {
             $healthy = $true
+            Write-SmokeEvent "endpoint.healthy" @{ port = $port; path = $path; status = $response.StatusCode }
             Write-Host "Backend health check passed on port $port via $path."
             break
           }
@@ -424,6 +590,14 @@ try {
   }
 
   if (-not $healthy) {
+    Write-SmokeEvent "endpoint.probe-matrix" @{
+      attempts = @($probeAttempts | Sort-Object)
+      totalAttempts = $probeAttempts.Count
+    }
+    Write-SmokeEvent "runtime.root-candidates" @{
+      candidatesTried = @($script:runtimeRootCandidatesTried)
+      count = $script:runtimeRootCandidatesTried.Count
+    }
     if ($installerProcess) {
       Write-Host "Installer exited: $($installerProcess.HasExited)"
       if ($installerProcess.HasExited) {
@@ -446,6 +620,28 @@ try {
         Select-Object -ExpandProperty FullName
     }
     throw "Windows packaged app did not become healthy within $TimeoutSeconds seconds."
+  }
+  if (-not $launcherSeenRunning) {
+    Write-SmokeEvent "contract.failure" @{
+      reason = "launcher-not-observed"
+      launcherPath = if ($launcher) { $launcher.FullName } else { $null }
+      launcherSource = $launcherSource
+    }
+    throw "Windows packaged app became healthy but launcher process was not observed running."
+  }
+  Write-SmokeEvent "endpoint.probe-matrix" @{
+    attempts = @($probeAttempts | Sort-Object)
+    totalAttempts = $probeAttempts.Count
+  }
+  Write-SmokeEvent "runtime.root-candidates" @{
+    candidatesTried = @($script:runtimeRootCandidatesTried)
+    count = $script:runtimeRootCandidatesTried.Count
+  }
+  Write-SmokeEvent "contract.pass" @{
+    launcherObserved = $launcherSeenRunning
+    backendHealthy = $healthy
+    launcherPath = if ($launcher) { $launcher.FullName } else { $null }
+    launcherSource = $launcherSource
   }
 } finally {
   Stop-ElizaHomeProcesses
