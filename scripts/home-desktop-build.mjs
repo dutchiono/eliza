@@ -169,9 +169,19 @@ function ensureAppDirs() {
 
 function verifyRuntimeCoreResolution() {
   const runtimeRoot = RUNTIME_DIST_DIR;
-  const packageRoot = path.join(runtimeRoot, "node_modules", "@elizaos", "core");
+  const packageRoot = path.join(
+    runtimeRoot,
+    "node_modules",
+    "@elizaos",
+    "core",
+  );
   const packageJson = path.join(packageRoot, "package.json");
-  const expectedNodeEntry = path.join(packageRoot, "dist", "node", "index.node.js");
+  const expectedNodeEntry = path.join(
+    packageRoot,
+    "dist",
+    "node",
+    "index.node.js",
+  );
 
   if (!fs.existsSync(packageJson)) {
     console.warn(
@@ -191,10 +201,14 @@ function verifyRuntimeCoreResolution() {
     const req = createRequire(path.join(runtimeRoot, "package.json"));
     process.stdout.write(req.resolve("@elizaos/core"));
   `;
-  const resolutionResult = spawnSync(process.execPath, ["-e", checker, runtimeRoot], {
-    cwd: ROOT,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  const resolutionResult = spawnSync(
+    process.execPath,
+    ["-e", checker, runtimeRoot],
+    {
+      cwd: ROOT,
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
 
   if (resolutionResult.status === 0) {
     const resolvedPath = resolutionResult.stdout.toString().trim();
