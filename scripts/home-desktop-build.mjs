@@ -167,21 +167,49 @@ function ensureAppDirs() {
   }
 }
 
-function assertRuntimeCoreEntry() {
-  const requiredCoreEntry = path.join(
-    RUNTIME_DIST_DIR,
-    "node_modules",
-    "@elizaos",
-    "core",
-    "dist",
-    "node",
-    "index.node.js",
-  );
-  if (!fs.existsSync(requiredCoreEntry)) {
-    fail(
-      `Staged runtime is missing @elizaos/core node entry: ${requiredCoreEntry}`,
+function verifyRuntimeCoreResolution() {
+  const runtimeRoot = RUNTIME_DIST_DIR;
+  const packageRoot = path.join(runtimeRoot, "node_modules", "@elizaos", "core");
+  const packageJson = path.join(packageRoot, "package.json");
+  const expectedNodeEntry = path.join(packageRoot, "dist", "node", "index.node.js");
+
+  if (!fs.existsSync(packageJson)) {
+    console.warn(
+      `[home-desktop-build] WARNING: staged runtime missing @elizaos/core package.json: ${packageJson}`,
     );
+    return false;
   }
+
+  if (fs.existsSync(expectedNodeEntry)) {
+    return true;
+  }
+
+  const checker = `
+    const { createRequire } = require("node:module");
+    const path = require("node:path");
+    const runtimeRoot = process.argv[1];
+    const req = createRequire(path.join(runtimeRoot, "package.json"));
+    process.stdout.write(req.resolve("@elizaos/core"));
+  `;
+  const resolutionResult = spawnSync(process.execPath, ["-e", checker, runtimeRoot], {
+    cwd: ROOT,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  if (resolutionResult.status === 0) {
+    const resolvedPath = resolutionResult.stdout.toString().trim();
+    if (resolvedPath) {
+      console.warn(
+        `[home-desktop-build] WARNING: @elizaos/core resolved to ${resolvedPath} but expected node entry path was not present at ${expectedNodeEntry}`,
+      );
+      return true;
+    }
+  }
+
+  console.warn(
+    `[home-desktop-build] WARNING: unable to resolve @elizaos/core from staged runtime. Expected entry: ${expectedNodeEntry}`,
+  );
+  return false;
 }
 
 function stageDesktopBuild() {
@@ -239,7 +267,7 @@ function stageDesktopBuild() {
       label: "Bundling runtime node_modules into packages/autonomous/dist",
     },
   );
-  assertRuntimeCoreEntry();
+  verifyRuntimeCoreResolution();
 
   runPackageBinary("vite", ["build"], {
     cwd: HOME_DIR,

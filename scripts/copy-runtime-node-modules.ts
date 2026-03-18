@@ -568,6 +568,19 @@ function getPackageVersion(packageJsonPath: string): string | null {
   }
 }
 
+function hasCoreRuntimeEntry(resolved: ResolvedPackage): boolean {
+  const packageRoot = path.dirname(resolved.packageJsonPath);
+  const requiredEntry = path.join(packageRoot, "dist", "node", "index.node.js");
+  return fs.existsSync(requiredEntry);
+}
+
+function isRuntimePackageUsable(name: string, resolved: ResolvedPackage): boolean {
+  if (name !== "@elizaos/core") {
+    return true;
+  }
+  return hasCoreRuntimeEntry(resolved);
+}
+
 export function isExactVersionSpecifier(
   spec: string | null | undefined,
 ): boolean {
@@ -727,20 +740,30 @@ function resolvePackage(
 ): ResolvedPackage | null {
   const candidates = collectResolvedCandidates(name, requesterDir);
   const selected = selectResolvedCandidate(candidates, requestedSpec);
-  if (selected) return selected;
+  if (selected && isRuntimePackageUsable(name, selected)) return selected;
   if (FORCE_WORKSPACE_RUNTIME_PACKAGES.has(name) && candidates.length > 0) {
-    // Keep core runtime dependencies sourced from workspace-installed builds.
-    // Avoid registry fallback drift for exact release-aligned versions.
-    return candidates[0];
+    // Prefer workspace-installed runtime packages when they include
+    // the required packaged runtime entrypoint.
+    const usableWorkspaceCandidate = candidates.find((candidate) =>
+      isRuntimePackageUsable(name, candidate),
+    );
+    if (usableWorkspaceCandidate) {
+      return usableWorkspaceCandidate;
+    }
   }
 
   if (canFetchPublishedPackage(requestedSpec)) {
     const fetched = fetchPublishedPackage(name, requestedSpec);
-    if (fetched) return fetched;
+    if (fetched && isRuntimePackageUsable(name, fetched)) return fetched;
   }
 
   if (candidates.length > 0) {
-    return candidates[0];
+    const usableCandidate = candidates.find((candidate) =>
+      isRuntimePackageUsable(name, candidate),
+    );
+    if (usableCandidate) {
+      return usableCandidate;
+    }
   }
 
   for (const sourceDir of collectInstalledPackageDirs(name, requesterDir)) {
@@ -760,7 +783,7 @@ function resolvePackage(
     }
 
     const fetched = fetchPublishedPackage(name, version);
-    if (fetched) return fetched;
+    if (fetched && isRuntimePackageUsable(name, fetched)) return fetched;
   }
 
   return null;
