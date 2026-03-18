@@ -241,6 +241,7 @@ $installerProcess = $null
 $launcherProcess = $null
 $launcherStarted = $false
 $runtimeValidated = $false
+$installerExitWarned = $false
 
 if ($resolvedBuildDir) {
   $launcher = Find-Launcher $resolvedBuildDir
@@ -275,30 +276,10 @@ if (-not $installer) {
 if ($PreferInstaller -and $installer) {
   Write-Host "Using installer (preferred): $($installer.FullName)"
   # The electrobun Windows installer is a Zig-based self-extractor, not an NSIS installer.
-  # It does not accept /S or /D= flags. Run it without arguments from its working directory
-  # so it can locate the adjacent .installer/*.tar.zst archive, then find launcher.exe in
-  # the fixed self-extraction root (%LOCALAPPDATA%\ai.eliza.home\canary\self-extraction).
-  $installerProcess = Start-Process -FilePath $installer.FullName -WorkingDirectory (Split-Path -Parent $installer.FullName) -PassThru -Wait
-  if ($installerProcess.ExitCode -ne 0) {
-    Write-Warning "Windows installer exited with non-zero code: $($installerProcess.ExitCode). Continuing with launcher/health validation."
-  }
-  Write-Host "Installer completed. Searching for launcher in self-extraction root: $selfExtractionRoot"
-  $launcher = Find-Launcher $selfExtractionRoot
-  if (-not $launcher) {
-    throw "Installer ran but no launcher.exe was found under $selfExtractionRoot"
-  }
+  # It does not accept /S or /D= flags. Start it and poll for extraction + health.
+  $installerProcess = Start-Process -FilePath $installer.FullName -WorkingDirectory (Split-Path -Parent $installer.FullName) -PassThru
+  $launcher = $null
   $launcherSource = "installed via self-extractor"
-  $runtimeRoot = Resolve-RuntimeRootFromLauncher -Launcher $launcher
-  if ($runtimeRoot) {
-    Write-Host "Validating packaged runtime at: $runtimeRoot"
-    Test-PackagedRuntimeSurface -RuntimeRoot $runtimeRoot
-    $runtimeValidated = $true
-  } else {
-    Write-Warning "Could not resolve runtime root from installer launcher path. Continuing to launch."
-  }
-  $launcherDir = Split-Path -Parent $launcher.FullName
-  $launcherProcess = Start-Process -FilePath $launcher.FullName -WorkingDirectory $launcherDir -PassThru
-  $launcherStarted = $true
 } elseif (-not $launcher) {
   $packagedTarball = Get-ChildItem -Path $resolvedArtifactsDir -File -Filter "*.tar.zst" -ErrorAction SilentlyContinue |
     Sort-Object LastWriteTime -Descending |
@@ -341,18 +322,9 @@ if ($PreferInstaller -and $installer) {
 
     Write-Host "Using installer: $($installer.FullName)"
     # Electrobun Windows installer is a Zig self-extractor; no NSIS /S /D= flags.
-    $installerProcess = Start-Process -FilePath $installer.FullName -WorkingDirectory (Split-Path -Parent $installer.FullName) -PassThru -Wait
-    if ($installerProcess.ExitCode -ne 0) {
-      Write-Warning "Windows installer exited with non-zero code: $($installerProcess.ExitCode). Continuing with launcher/health validation."
-    }
-    Write-Host "Installer completed. Searching for launcher in self-extraction root: $selfExtractionRoot"
-    $launcher = Find-Launcher $selfExtractionRoot
-    if (-not $launcher) {
-      throw "Installer ran but no launcher.exe was found under $selfExtractionRoot"
-    }
-    $launcherDir = Split-Path -Parent $launcher.FullName
-    $launcherProcess = Start-Process -FilePath $launcher.FullName -WorkingDirectory $launcherDir -PassThru
-    $launcherStarted = $true
+    $installerProcess = Start-Process -FilePath $installer.FullName -WorkingDirectory (Split-Path -Parent $installer.FullName) -PassThru
+    $launcher = $null
+    $launcherSource = "installed via self-extractor"
   }
 } else {
   $launcher = Write-ReusableLauncherPath -Launcher $launcher -TemporaryRoot $tempExtractDir
@@ -375,6 +347,16 @@ $healthy = $false
 
 try {
   while ((Get-Date) -lt $deadline) {
+    if (
+      $installerProcess -and
+      $installerProcess.HasExited -and
+      -not $installerExitWarned -and
+      $installerProcess.ExitCode -ne 0
+    ) {
+      Write-Warning "Windows installer exited with non-zero code: $($installerProcess.ExitCode). Continuing with launcher/health validation."
+      $installerExitWarned = $true
+    }
+
     if (-not $launcher) {
       $launcher = Find-Launcher $selfExtractionRoot
       if ($launcher) {
