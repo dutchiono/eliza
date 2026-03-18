@@ -288,6 +288,22 @@ probe_backend_candidates() {
   return 1
 }
 
+probe_backend_listening_ports() {
+  local port=""
+  while IFS= read -r port; do
+    [[ -z "$port" ]] && continue
+    if probe_backend_port "$port" >/dev/null; then
+      echo "$port"
+      return 0
+    fi
+  done < <(
+    lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null \
+      | awk 'NR>1 { split($9, parts, ":"); port=parts[length(parts)]; if (port ~ /^[0-9]+$/) print port; }' \
+      | sort -u
+  )
+  return 1
+}
+
 build_launcher_command() {
   LAUNCH_COMMAND=("$LAUNCHER_PATH")
 
@@ -659,7 +675,11 @@ while [[ $SECONDS -lt $DEADLINE ]]; do
       break
     fi
   else
-    BACKEND_PORT="$(probe_backend_candidates || true)"
+    BACKEND_PORT="$(
+      probe_backend_candidates \
+        || probe_backend_listening_ports \
+        || true
+    )"
     if [[ -n "$BACKEND_PORT" ]]; then
       echo "Backend health check PASSED on probed port $BACKEND_PORT."
       break

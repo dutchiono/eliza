@@ -293,12 +293,40 @@ function resolveRuntimeEntryPath(runtimeDistPath: string): string | null {
   const candidates = [
     joinPortable(runtimeDistPath, "bin.js"),
     joinPortable(runtimeDistPath, "entry.js"),
+    joinPortable(runtimeDistPath, "packages", "autonomous", "src", "bin.js"),
+    joinPortable(runtimeDistPath, "packages", "autonomous", "bin.js"),
   ];
 
   for (const candidate of candidates) {
     if (fs.existsSync(candidate)) {
       return candidate;
     }
+  }
+
+  // New autonomous dist packaging can place the executable entry behind the
+  // package.json "bin" field instead of a root-level bin.js/entry.js.
+  try {
+    const packageJsonPath = joinPortable(runtimeDistPath, "package.json");
+    if (fs.existsSync(packageJsonPath)) {
+      const packageJsonRaw = fs.readFileSync(packageJsonPath, "utf8");
+      const packageJson = JSON.parse(packageJsonRaw) as {
+        bin?: string | Record<string, string>;
+      };
+      const binField = packageJson.bin;
+      if (typeof binField === "string") {
+        const resolved = joinPortable(runtimeDistPath, binField);
+        if (fs.existsSync(resolved)) return resolved;
+      } else if (binField && typeof binField === "object") {
+        const preferred =
+          binField["eliza-autonomous"] ?? Object.values(binField)[0];
+        if (typeof preferred === "string" && preferred.length > 0) {
+          const resolved = joinPortable(runtimeDistPath, preferred);
+          if (fs.existsSync(resolved)) return resolved;
+        }
+      }
+    }
+  } catch {
+    // Ignore malformed/missing package metadata and continue fallback handling.
   }
 
   return null;
@@ -545,7 +573,7 @@ export class AgentManager {
             contents = "<unreadable>";
           }
         }
-        const errMsg = `No runnable runtime entry found in ${runtimeDistPath} (checked bin.js, entry.js; dist exists: ${distExists}, contents: ${contents})`;
+        const errMsg = `No runnable runtime entry found in ${runtimeDistPath} (checked bin.js, entry.js, packages/autonomous/src/bin.js, package.json bin; dist exists: ${distExists}, contents: ${contents})`;
         diagnosticLog(`[Agent] ${errMsg}`);
         this.status = {
           state: "error",

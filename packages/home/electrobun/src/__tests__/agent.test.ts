@@ -282,7 +282,35 @@ describe("AgentManager", () => {
       const status = await manager.start();
       expect(status.state).toBe("error");
       expect(status.error).toContain("No runnable runtime entry found");
-      expect(status.error).toContain("checked bin.js, entry.js");
+      expect(status.error).toContain(
+        "checked bin.js, entry.js, packages/autonomous/src/bin.js, package.json bin",
+      );
+    });
+
+    it("uses packaged autonomous bin.js when root bin.js is absent", async () => {
+      const existsSync = await getExistsSyncMock();
+      existsSync.mockImplementation((candidate: string) => {
+        if (candidate === MOCK_DIST_PATH) return true;
+        if (candidate === "/mock/home-dist/packages/autonomous/src/bin.js") {
+          return true;
+        }
+        return false;
+      });
+
+      const mockProc = createMockProcess();
+      mockSpawn.mockReturnValue(mockProc);
+
+      mockFetch.mockResolvedValueOnce({ ok: true });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ agents: [{ name: "Eliza Home" }] }),
+      });
+
+      const status = await manager.start();
+      expect(status.state).toBe("running");
+      expect(mockSpawn).toHaveBeenCalledTimes(1);
+      const spawnArgs = mockSpawn.mock.calls[0];
+      expect(spawnArgs[0][2]).toBe("/mock/home-dist/packages/autonomous/src/bin.js");
     });
 
     it("rejects embedded startup in external mode", async () => {

@@ -116,6 +116,27 @@ function Get-ObservedBackendPorts([int]$DefaultPort) {
     }
   }
 
+  try {
+    $candidatePids = Get-Process -ErrorAction SilentlyContinue |
+      Where-Object {
+        $_.ProcessName -in @("launcher", "bun") -or
+        $_.ProcessName -like "Eliza*"
+      } |
+      Select-Object -ExpandProperty Id
+    if ($candidatePids) {
+      $listening = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+        Where-Object { $candidatePids -contains $_.OwningProcess } |
+        Select-Object -ExpandProperty LocalPort -Unique
+      foreach ($port in $listening) {
+        if ($port -is [int] -and -not $ports.Contains($port)) {
+          $ports.Add($port)
+        }
+      }
+    }
+  } catch {
+    # Ignore runner-specific socket enumeration failures.
+  }
+
   return $ports.ToArray()
 }
 
