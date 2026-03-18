@@ -439,6 +439,17 @@ jobs:
             Set-Content -Path $dest -Value $versionJson -Encoding utf8
           }
 
+      - name: Build Windows wrapper installer
+        if: matrix.platform.os == 'windows'
+        shell: pwsh
+        run: |
+          $version = (Get-Content packages/home/electrobun/package.json | ConvertFrom-Json).version
+          pwsh -File packages/home/electrobun/scripts/build-wrapper-installer.ps1 `
+            -BuildDir packages/home/electrobun/build `
+            -ArtifactsDir packages/home/electrobun/artifacts `
+            -BuildEnv "${{ needs.prepare.outputs.env }}" `
+            -Version $version
+
       - name: Inject version.json into bundle (macOS / Linux)
         if: matrix.platform.os != 'windows'
         run: |
@@ -470,7 +481,8 @@ jobs:
           Remove-Item $env:MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE -Force -ErrorAction SilentlyContinue
           Remove-Item $env:MILADY_TEST_WINDOWS_SMOKE_LOG_FILE -Force -ErrorAction SilentlyContinue
           pwsh -File packages/home/electrobun/scripts/smoke-test-windows.ps1 `
-            -PreferInstaller
+            -PreferInstaller `
+            -BuildEnv "${{ needs.prepare.outputs.env }}"
 
       - name: Smoke test packaged macOS app
         if: matrix.platform.os == 'macos'
@@ -540,15 +552,37 @@ jobs:
           if ($env:MILADY_TEST_WINDOWS_SMOKE_LOG_FILE -and (Test-Path $env:MILADY_TEST_WINDOWS_SMOKE_LOG_FILE)) {
             Copy-Item -Path $env:MILADY_TEST_WINDOWS_SMOKE_LOG_FILE -Destination (Join-Path $diagDir "smoke-events.jsonl") -Force
           }
+          $contractPath = Join-Path $PWD "packages/home/electrobun/artifacts/windows-installer-contract.json"
+          if (Test-Path $contractPath) {
+            Copy-Item -Path $contractPath -Destination (Join-Path $diagDir "windows-installer-contract.json") -Force
+            $contract = Get-Content $contractPath | ConvertFrom-Json
+            if (Test-Path $contract.installRoot) {
+              Get-ChildItem -Path $contract.installRoot -Recurse -File -ErrorAction SilentlyContinue |
+                Select-Object -ExpandProperty FullName |
+                Out-File -FilePath (Join-Path $diagDir "installed-files.txt") -Encoding utf8
+            }
+            if (Test-Path $contract.expectedShortcutPath) {
+              Copy-Item -Path $contract.expectedShortcutPath -Destination (Join-Path $diagDir "start-menu-shortcut.lnk") -Force
+            }
+            if (Test-Path $contract.installRoot) {
+              $installedMetadataPath = Join-Path $contract.installRoot "install-metadata.json"
+              if (Test-Path $installedMetadataPath) {
+                Copy-Item -Path $installedMetadataPath -Destination (Join-Path $diagDir "install-metadata.json") -Force
+              }
+            }
+          }
+          Get-ChildItem -Path "packages/home/electrobun/build" -Recurse -File -Filter "wrapper-diagnostics.json" -ErrorAction SilentlyContinue | ForEach-Object {
+            Copy-Item -Path $_.FullName -Destination (Join-Path $diagDir "wrapper-diagnostics.json") -Force
+          }
 
       - name: Stage Windows setup executables
         if: matrix.platform.os == 'windows'
         shell: pwsh
         run: |
           $artifactsDir = Join-Path $PWD "packages/home/electrobun/artifacts"
-          $setupExecutables = Get-ChildItem -Path "packages/home/electrobun/build" -Recurse -File -Filter "*Setup*.exe" -ErrorAction SilentlyContinue
+          $setupExecutables = Get-ChildItem -Path $artifactsDir -File -Filter "*Setup*.exe" -ErrorAction SilentlyContinue
           if (-not $setupExecutables) {
-            Write-Error "No Windows setup executable found under packages/home/electrobun/build"
+            Write-Error "No Windows wrapper installer found under packages/home/electrobun/artifacts"
             exit 1
           }
           $canonicalSetup = $setupExecutables |
@@ -558,8 +592,6 @@ jobs:
           if (-not $canonicalSetup) {
             $canonicalSetup = $setupExecutables | Sort-Object Length -Descending | Select-Object -First 1
           }
-          New-Item -ItemType Directory -Force -Path $artifactsDir | Out-Null
-          Copy-Item $canonicalSetup.FullName -Destination $artifactsDir -Force
           Write-Host "Staged canonical Windows setup executable: $($canonicalSetup.Name)"
 
       - name: Compress Windows artifacts before upload

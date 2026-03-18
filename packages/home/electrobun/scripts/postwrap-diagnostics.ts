@@ -24,6 +24,7 @@ type WrapperDiagnostics = {
   appName: string;
   arch: string;
   binaryDir: string;
+  bundleLayer: "raw_bundle" | "wrapped_archive_bundle" | "installer_payload";
   binaries: BinaryReport[];
   buildDir: string | null;
   generatedAt: string;
@@ -157,6 +158,36 @@ export function resolveBundleLayout(
   };
 }
 
+export function detectBundleLayer(
+  bundlePath: string,
+  osName: string,
+  binaryDir: string,
+  resourcesDir: string,
+): WrapperDiagnostics["bundleLayer"] {
+  if (/setup/i.test(path.basename(bundlePath))) {
+    return "installer_payload";
+  }
+
+  if (osName === "macos") {
+    return "raw_bundle";
+  }
+
+  if (fs.existsSync(joinPortable(binaryDir, "launcher.exe"))) {
+    return "raw_bundle";
+  }
+
+  if (
+    fs.existsSync(resourcesDir) &&
+    fs
+      .readdirSync(resourcesDir)
+      .some((entry) => entry.toLowerCase().endsWith(".tar.zst"))
+  ) {
+    return "wrapped_archive_bundle";
+  }
+
+  return "raw_bundle";
+}
+
 export function resolveDiagnosticsOutputPath(
   bundlePath: string,
   env: NodeJS.ProcessEnv = process.env,
@@ -256,6 +287,12 @@ export function main(
     wrapperBundlePath,
     osName,
   );
+  const bundleLayer = detectBundleLayer(
+    wrapperBundlePath,
+    osName,
+    binaryDir,
+    resourcesDir,
+  );
   const outputPath = resolveDiagnosticsOutputPath(wrapperBundlePath, env);
   const binaryNames =
     osName === "macos"
@@ -282,6 +319,7 @@ export function main(
       env.ELECTROBUN_APP_NAME?.trim() || path.basename(wrapperBundlePath),
     arch,
     binaryDir,
+    bundleLayer,
     binaries: binaryNames.map((binaryName) =>
       collectBinaryReport(binaryDir, binaryName),
     ),
@@ -300,7 +338,19 @@ export function main(
   console.log(
     `[postwrap-diagnostics] wrote ${outputPath} (${diagnostics.os}/${diagnostics.arch})`,
   );
+  console.log(
+    `[postwrap-diagnostics] bundle layer: ${diagnostics.bundleLayer}`,
+  );
   for (const binary of diagnostics.binaries) {
+    if (
+      !binary.exists &&
+      diagnostics.bundleLayer !== "raw_bundle"
+    ) {
+      console.log(
+        `[postwrap-diagnostics] ${binary.name}: not directly present in ${diagnostics.bundleLayer}`,
+      );
+      continue;
+    }
     if (!binary.exists) {
       console.log(`[postwrap-diagnostics] missing ${binary.name}`);
       continue;

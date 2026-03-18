@@ -11,6 +11,9 @@ const requiredPaths = [
   ".github/workflows/release-home-electrobun.yml",
   "ELIZA_HOME_ELECTROBUN_RUNBOOK.md",
   "packages/home/electrobun/scripts/smoke-test-linux.sh",
+  "packages/home/electrobun/scripts/build-wrapper-installer.ps1",
+  "packages/home/electrobun/scripts/install-windows-wrapper.ps1",
+  "packages/home/electrobun/scripts/windows-installer-common.ps1",
 ];
 
 const requiredWorkflowSnippets = [
@@ -19,6 +22,7 @@ const requiredWorkflowSnippets = [
   "node scripts/home-desktop-build.mjs package",
   "packages/home/electrobun/artifacts",
   "smoke-test-windows.ps1",
+  "build-wrapper-installer.ps1",
   "smoke-test.sh",
   "smoke-test-linux.sh",
   "softprops/action-gh-release@v2",

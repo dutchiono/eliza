@@ -204,6 +204,17 @@ describe("AgentManager", () => {
         "/Users/test/AppData/Local/ai.eliza.home/canary/self-extraction/Eliza Home-canary/resources/app/home-dist",
       );
     });
+
+    it("includes the installed wrapper app runtime path for known LocalAppData installs", () => {
+      const candidates = getRuntimeDistFallbackCandidates(
+        "/Users/test/AppData/Local/Programs/Eliza Home/canary/app/bin",
+        "/Users/test/AppData/Local/Programs/Eliza Home/canary/app/bin/launcher.exe",
+      );
+
+      expect(candidates).toContain(
+        "/Users/test/AppData/Local/Programs/Eliza Home/canary/app/resources/app/home-dist",
+      );
+    });
   });
 
   describe("getHealthPollTimeoutMs()", () => {

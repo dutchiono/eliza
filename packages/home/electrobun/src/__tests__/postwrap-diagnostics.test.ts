@@ -5,6 +5,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  detectBundleLayer,
   main,
   resolveBundleLayout,
   resolveDiagnosticsOutputPath,
@@ -58,6 +59,25 @@ describe("resolveBundleLayout", () => {
   });
 });
 
+describe("detectBundleLayer", () => {
+  it("reports wrapped archive bundles when resources contain tarballs", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "postwrap-layer-"));
+    const bundleRoot = path.join(tempDir, "win-wrapper");
+    const resourcesDir = path.join(bundleRoot, "resources");
+    fs.mkdirSync(resourcesDir, { recursive: true });
+    fs.writeFileSync(path.join(resourcesDir, "abc123.tar.zst"), "placeholder");
+
+    expect(
+      detectBundleLayer(
+        bundleRoot,
+        "win",
+        path.join(bundleRoot, "bin"),
+        resourcesDir,
+      ),
+    ).toBe("wrapped_archive_bundle");
+  });
+});
+
 describe("resolveDiagnosticsOutputPath", () => {
   it("writes into ELECTROBUN_BUILD_DIR when available", () => {
     expect(
@@ -91,6 +111,7 @@ describe("main", () => {
       fs.readFileSync(diagnosticsPath, "utf8"),
     ) as {
       binaryDir: string;
+      bundleLayer: string;
       os: string;
       outputPath: string;
       resourcesDir: string;
@@ -99,6 +120,7 @@ describe("main", () => {
 
     expect(diagnostics).toMatchObject({
       binaryDir: path.join(wrapperBundle, "bin"),
+      bundleLayer: "raw_bundle",
       os: "linux",
       outputPath: diagnosticsPath,
       resourcesDir: path.join(wrapperBundle, "resources"),
