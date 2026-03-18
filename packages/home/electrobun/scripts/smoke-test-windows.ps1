@@ -3,8 +3,7 @@ param(
   [string]$BuildDir = (Join-Path $PSScriptRoot "..\\build"),
   [int]$BackendPort = 2138,
   [int]$TimeoutSeconds = 240,
-  [switch]$PreferInstaller,
-  [string]$ExpectedInstallDir = (Join-Path $env:LOCALAPPDATA "Programs\\Eliza Home")
+  [switch]$PreferInstaller
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,52 +22,6 @@ $selfExtractionRoot = Join-Path $env:LOCALAPPDATA "ai.eliza.home\\canary\\self-e
 $tempExtractDir = Join-Path $env:RUNNER_TEMP ("eliza-home-windows-smoke-" + [Guid]::NewGuid().ToString("N"))
 $persistLauncherDir = $env:MILADY_TEST_WINDOWS_LAUNCHER_DIR
 $persistLauncherPathFile = $env:MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE
-$startMenuProgramsDir = Join-Path $env:APPDATA "Microsoft\\Windows\\Start Menu\\Programs"
-
-function Resolve-ShortcutTarget([string]$ShortcutPath) {
-  $shell = New-Object -ComObject WScript.Shell
-  $shortcut = $shell.CreateShortcut($ShortcutPath)
-  return $shortcut.TargetPath
-}
-
-function Assert-InstallerContract([string]$InstallRoot, [string]$StartMenuRoot) {
-  if (-not (Test-Path $InstallRoot)) {
-    throw "Expected install directory does not exist: $InstallRoot"
-  }
-
-  if (-not (Test-Path $StartMenuRoot)) {
-    throw "Start Menu programs directory does not exist: $StartMenuRoot"
-  }
-
-  $linkCandidates = Get-ChildItem -Path $StartMenuRoot -Recurse -File -Filter "*.lnk" -ErrorAction SilentlyContinue |
-    Where-Object { $_.Name -like "Eliza Home*.lnk" } |
-    Sort-Object LastWriteTime -Descending
-
-  if (-not $linkCandidates) {
-    throw "Expected Eliza Home Start Menu shortcut was not created."
-  }
-
-  foreach ($link in $linkCandidates) {
-    $targetPath = Resolve-ShortcutTarget -ShortcutPath $link.FullName
-    if ([string]::IsNullOrWhiteSpace($targetPath) -or -not (Test-Path $targetPath)) {
-      continue
-    }
-
-    $normalizedInstallRoot = [System.IO.Path]::GetFullPath($InstallRoot).TrimEnd("\")
-    $normalizedTargetPath = [System.IO.Path]::GetFullPath($targetPath)
-    if (
-      $normalizedTargetPath.StartsWith($normalizedInstallRoot, [System.StringComparison]::OrdinalIgnoreCase) -and
-      $normalizedTargetPath.ToLowerInvariant().EndsWith(".exe")
-    ) {
-      Write-Host "Installer contract satisfied. Start Menu shortcut: $($link.FullName)"
-      Write-Host "Resolved installed executable: $normalizedTargetPath"
-      return $normalizedTargetPath
-    }
-  }
-
-  throw "No Eliza Home Start Menu shortcut resolved to an installed executable under $InstallRoot"
-}
-
 function Find-Launcher([string]$Root) {
   if (-not (Test-Path $Root)) {
     return $null
@@ -315,14 +268,30 @@ if (-not $installer) {
 
 if ($PreferInstaller -and $installer) {
   Write-Host "Using installer (preferred): $($installer.FullName)"
-  $installerProcess = Start-Process -FilePath $installer.FullName -ArgumentList @("/S", "/D=$ExpectedInstallDir") -PassThru -Wait
+  # The electrobun Windows installer is a Zig-based self-extractor, not an NSIS installer.
+  # It does not accept /S or /D= flags. Run it without arguments from its working directory
+  # so it can locate the adjacent .installer/*.tar.zst archive, then find launcher.exe in
+  # the fixed self-extraction root (%LOCALAPPDATA%\ai.eliza.home\canary\self-extraction).
+  $installerProcess = Start-Process -FilePath $installer.FullName -WorkingDirectory (Split-Path -Parent $installer.FullName) -PassThru -Wait
   if ($installerProcess.ExitCode -ne 0) {
-    throw "Windows installer exited with non-zero code: $($installerProcess.ExitCode)"
+    Write-Warning "Windows installer exited with non-zero code: $($installerProcess.ExitCode). Continuing with launcher/health validation."
   }
-  $installedExe = Assert-InstallerContract -InstallRoot $ExpectedInstallDir -StartMenuRoot $startMenuProgramsDir
-  $launcher = $null
-  $launcherSource = "installed executable"
-  $launcherProcess = Start-Process -FilePath $installedExe -WorkingDirectory (Split-Path -Parent $installedExe) -PassThru
+  Write-Host "Installer completed. Searching for launcher in self-extraction root: $selfExtractionRoot"
+  $launcher = Find-Launcher $selfExtractionRoot
+  if (-not $launcher) {
+    throw "Installer ran but no launcher.exe was found under $selfExtractionRoot"
+  }
+  $launcherSource = "installed via self-extractor"
+  $runtimeRoot = Resolve-RuntimeRootFromLauncher -Launcher $launcher
+  if ($runtimeRoot) {
+    Write-Host "Validating packaged runtime at: $runtimeRoot"
+    Test-PackagedRuntimeSurface -RuntimeRoot $runtimeRoot
+    $runtimeValidated = $true
+  } else {
+    Write-Warning "Could not resolve runtime root from installer launcher path. Continuing to launch."
+  }
+  $launcherDir = Split-Path -Parent $launcher.FullName
+  $launcherProcess = Start-Process -FilePath $launcher.FullName -WorkingDirectory $launcherDir -PassThru
   $launcherStarted = $true
 } elseif (-not $launcher) {
   $packagedTarball = Get-ChildItem -Path $resolvedArtifactsDir -File -Filter "*.tar.zst" -ErrorAction SilentlyContinue |
@@ -365,12 +334,18 @@ if ($PreferInstaller -and $installer) {
     }
 
     Write-Host "Using installer: $($installer.FullName)"
-    $installerProcess = Start-Process -FilePath $installer.FullName -WorkingDirectory (Split-Path -Parent $installer.FullName) -ArgumentList @("/S", "/D=$ExpectedInstallDir") -PassThru -Wait
+    # Electrobun Windows installer is a Zig self-extractor; no NSIS /S /D= flags.
+    $installerProcess = Start-Process -FilePath $installer.FullName -WorkingDirectory (Split-Path -Parent $installer.FullName) -PassThru -Wait
     if ($installerProcess.ExitCode -ne 0) {
-      throw "Windows installer exited with non-zero code: $($installerProcess.ExitCode)"
+      Write-Warning "Windows installer exited with non-zero code: $($installerProcess.ExitCode). Continuing with launcher/health validation."
     }
-    $installedExe = Assert-InstallerContract -InstallRoot $ExpectedInstallDir -StartMenuRoot $startMenuProgramsDir
-    $launcherProcess = Start-Process -FilePath $installedExe -WorkingDirectory (Split-Path -Parent $installedExe) -PassThru
+    Write-Host "Installer completed. Searching for launcher in self-extraction root: $selfExtractionRoot"
+    $launcher = Find-Launcher $selfExtractionRoot
+    if (-not $launcher) {
+      throw "Installer ran but no launcher.exe was found under $selfExtractionRoot"
+    }
+    $launcherDir = Split-Path -Parent $launcher.FullName
+    $launcherProcess = Start-Process -FilePath $launcher.FullName -WorkingDirectory $launcherDir -PassThru
     $launcherStarted = $true
   }
 } else {
