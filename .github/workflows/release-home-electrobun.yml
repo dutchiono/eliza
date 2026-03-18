@@ -482,6 +482,8 @@ jobs:
           Remove-Item $env:MILADY_TEST_WINDOWS_SMOKE_LOG_FILE -Force -ErrorAction SilentlyContinue
           pwsh -File packages/home/electrobun/scripts/smoke-test-windows.ps1 `
             -PreferInstaller `
+            -InstallTimeoutSeconds 600 `
+            -TimeoutSeconds 300 `
             -BuildEnv "${{ needs.prepare.outputs.env }}"
 
       - name: Smoke test packaged macOS app

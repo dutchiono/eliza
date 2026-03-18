@@ -4,6 +4,7 @@ param(
   [string]$BuildEnv = "canary",
   [int]$BackendPort = 2138,
   [int]$TimeoutSeconds = 240,
+  [int]$InstallTimeoutSeconds = 600,
   [switch]$PreferInstaller
 )
 
@@ -214,10 +215,11 @@ Write-SmokeEvent "installer.start" @{
 }
 $installerProcess = Start-Process -FilePath $installer.FullName -ArgumentList $installerArgs -WorkingDirectory (Split-Path -Parent $installer.FullName) -PassThru
 
-$installDeadline = (Get-Date).AddSeconds([Math]::Min($TimeoutSeconds, 180))
+$installDeadline = (Get-Date).AddSeconds($InstallTimeoutSeconds)
 $installRootReady = $false
 $shortcutReady = $false
 $launcherReady = $false
+$lastInstallerProgressLog = Get-Date
 
 while ((Get-Date) -lt $installDeadline) {
   $installRootReady = Test-Path $contract.InstallRoot
@@ -236,16 +238,27 @@ while ((Get-Date) -lt $installDeadline) {
     break
   }
 
+  if (((Get-Date) - $lastInstallerProgressLog).TotalSeconds -ge 30) {
+    Write-SmokeEvent "installer.wait" @{
+      installerStillRunning = -not $installerProcess.HasExited
+      installRootReady = $installRootReady
+      launcherReady = $launcherReady
+      shortcutReady = $shortcutReady
+      installRoot = $contract.InstallRoot
+    }
+    $lastInstallerProgressLog = Get-Date
+  }
+
   Start-Sleep -Seconds 2
 }
 
 if (-not $installRootReady) {
   Write-SmokeEvent "contract.failure" @{
-    reason = "install-root-missing"
+    reason = if ($installerProcess.HasExited) { "install-root-missing" } else { "install-timeout" }
     installRoot = $contract.InstallRoot
     installerExitCode = if ($installerProcess.HasExited) { $installerProcess.ExitCode } else { $null }
   }
-  throw "Windows installer did not produce install root: $($contract.InstallRoot)"
+  throw "Windows installer did not produce install root within $InstallTimeoutSeconds seconds: $($contract.InstallRoot)"
 }
 
 if (-not $launcherReady) {
