@@ -405,6 +405,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install Inno Setup on Windows
+        if: matrix.platform.os == 'windows'
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            Write-Error "ISCC.exe not found after installing Inno Setup"
+            exit 1
+          }
+          "INNO_SETUP_ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Build Electrobun app
         run: |
           if [ "${{ matrix.platform.os }}" = "macos" ] && [ "${{ matrix.platform.artifact-name }}" = "macos-x64" ]; then
@@ -553,6 +565,10 @@ jobs:
           }
           if ($env:MILADY_TEST_WINDOWS_SMOKE_LOG_FILE -and (Test-Path $env:MILADY_TEST_WINDOWS_SMOKE_LOG_FILE)) {
             Copy-Item -Path $env:MILADY_TEST_WINDOWS_SMOKE_LOG_FILE -Destination (Join-Path $diagDir "smoke-events.jsonl") -Force
+          }
+          $installerLog = Join-Path $env:MILADY_TEST_WINDOWS_SMOKE_TEMP_ROOT "installer.log"
+          if (Test-Path $installerLog) {
+            Copy-Item -Path $installerLog -Destination (Join-Path $diagDir "installer.log") -Force
           }
           $contractPath = Join-Path $PWD "packages/home/electrobun/artifacts/windows-installer-contract.json"
           if (Test-Path $contractPath) {

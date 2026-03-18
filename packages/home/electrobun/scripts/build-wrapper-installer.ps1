@@ -18,16 +18,24 @@ $resolvedArtifactsDir = (Resolve-Path $ArtifactsDir).Path
 $payloadSource = Resolve-ElizaHomeWindowsPayloadSource -ArtifactsDir $resolvedArtifactsDir -BuildDir $resolvedBuildDir
 $assetBaseName = Get-ElizaHomeWindowsAssetBaseName -BuildEnv $BuildEnv
 $outputExe = Join-Path $resolvedArtifactsDir "$assetBaseName.exe"
+$iconPath = Join-Path $PSScriptRoot "..\assets\appIcon.ico"
 
 $tempRoot = Join-Path $env:TEMP ("eliza-home-wrapper-installer-" + [Guid]::NewGuid().ToString("N"))
 $payloadRoot = Join-Path $tempRoot "payload"
 $payloadAppRoot = Join-Path $payloadRoot "app"
-$payloadZip = Join-Path $tempRoot "payload.zip"
-$installCmd = Join-Path $tempRoot "install.cmd"
-$sedPath = Join-Path $tempRoot "installer.sed"
+$issPath = Join-Path $tempRoot "eliza-home-installer.iss"
 $manifestPath = Join-Path $resolvedArtifactsDir "windows-installer-contract.json"
+$innoCompiler = @(
+  $env:INNO_SETUP_ISCC,
+  (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"),
+  (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe")
+) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path $_) } | Select-Object -First 1
 
 try {
+  if (-not $innoCompiler) {
+    throw "Could not find Inno Setup compiler (ISCC.exe)."
+  }
+
   New-Item -ItemType Directory -Force -Path $payloadRoot | Out-Null
   if ($payloadSource.SourceLayer -eq "packaged_archive") {
     $archiveExtractRoot = Join-Path $tempRoot "archive-expanded"
@@ -52,73 +60,61 @@ try {
     }
   }
 
-  & tar.exe -a -cf $payloadZip -C $payloadRoot "app"
-  if ($LASTEXITCODE -ne 0 -or -not (Test-Path $payloadZip)) {
-    throw "Failed to create payload zip at $payloadZip"
+  $contract = Get-ElizaHomeWindowsInstallContract -BuildEnv $BuildEnv
+  $appDirectoryName = Split-Path -Leaf $contract.AppRoot
+  $defaultDirName = $contract.AppRoot.Replace('\', '\\')
+  $groupName = (Split-Path -Parent $contract.ShortcutPath).Replace("$($env:APPDATA)\Microsoft\Windows\Start Menu\Programs\", "")
+  $groupName = $groupName -replace '\\', '\'
+  $shortcutName = [System.IO.Path]::GetFileNameWithoutExtension($contract.ShortcutName)
+  $launcherRelative = "bin\launcher.exe"
+  $workingDirRelative = "bin"
+  $outputDirEscaped = $resolvedArtifactsDir.Replace('\', '\\')
+  $payloadSourceEscaped = $payloadAppRoot.Replace('\', '\\')
+  $iconDirective = if (Test-Path $iconPath) {
+    "SetupIconFile=$($iconPath.Replace('\', '\\'))"
+  } else {
+    ""
   }
 
-  $installCmdContents = @"
-@echo off
-setlocal
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0install-windows-wrapper.ps1" -BuildEnv "$BuildEnv" -AppName "$AppName" -Version "$Version" -PayloadZip "%~dp0payload.zip" %*
-exit /b %ERRORLEVEL%
+  $issContents = @"
+[Setup]
+AppId=ai.eliza.home.$($contract.Channel)
+AppName=$AppName
+AppVersion=$Version
+AppPublisher=elizaOS
+DefaultDirName=$defaultDirName
+DefaultGroupName=$groupName
+OutputDir=$outputDirEscaped
+OutputBaseFilename=$assetBaseName
+Compression=lzma2/ultra64
+SolidCompression=yes
+PrivilegesRequired=lowest
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+DisableDirPage=yes
+DisableProgramGroupPage=yes
+WizardStyle=modern
+UninstallDisplayIcon={app}\$launcherRelative
+$iconDirective
+
+[Files]
+Source: "$payloadSourceEscaped\\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[Icons]
+Name: "{userprograms}\\$groupName\\$shortcutName"; Filename: "{app}\\$launcherRelative"; WorkingDir: "{app}\\$workingDirRelative"
 "@
-  Set-Content -Path $installCmd -Value $installCmdContents -Encoding Ascii
+  Set-Content -Path $issPath -Value $issContents -Encoding Ascii
 
-  $installScriptPath = Join-Path $PSScriptRoot "install-windows-wrapper.ps1"
-  $commonScriptPath = Join-Path $PSScriptRoot "windows-installer-common.ps1"
-
-  $sedContents = @"
-[Version]
-Class=IEXPRESS
-SEDVersion=3
-[Options]
-PackagePurpose=InstallApp
-ShowInstallProgramWindow=0
-HideExtractAnimation=1
-UseLongFileName=1
-InsideCompressed=1
-CAB_FixedSize=0
-CAB_ResvCodeSigning=0
-RebootMode=N
-InstallPrompt=
-DisplayLicense=
-FinishMessage=
-TargetName=$outputExe
-FriendlyName=$AppName Setup
-AppLaunched=cmd /c install.cmd
-PostInstallCmd=<None>
-AdminQuietInstCmd=cmd /c install.cmd -Quiet -NoLaunch
-UserQuietInstCmd=cmd /c install.cmd -Quiet -NoLaunch
-SourceFiles=SourceFiles
-[Strings]
-FILE0="payload.zip"
-FILE1="install.cmd"
-FILE2="install-windows-wrapper.ps1"
-FILE3="windows-installer-common.ps1"
-[SourceFiles]
-SourceFiles0=$tempRoot
-[SourceFiles0]
-%FILE0%=
-%FILE1%=
-%FILE2%=
-%FILE3%=
-"@
-  Set-Content -Path $sedPath -Value $sedContents -Encoding Ascii
-
-  Copy-Item -Path $installScriptPath -Destination (Join-Path $tempRoot "install-windows-wrapper.ps1") -Force
-  Copy-Item -Path $commonScriptPath -Destination (Join-Path $tempRoot "windows-installer-common.ps1") -Force
-
-  & iexpress.exe /N $sedPath | Out-Null
+  & $innoCompiler "/Qp" $issPath | Out-Null
   if (-not (Test-Path $outputExe)) {
     throw "Wrapper installer was not generated at $outputExe"
   }
 
-  $contract = Get-ElizaHomeWindowsInstallContract -BuildEnv $BuildEnv
   [ordered]@{
     appName = $AppName
     version = $Version
     channel = $contract.Channel
+    installerType = "inno-setup"
     payloadSourceLayer = $payloadSource.SourceLayer
     payloadSourcePath = $payloadSource.Path
     installerPath = $outputExe

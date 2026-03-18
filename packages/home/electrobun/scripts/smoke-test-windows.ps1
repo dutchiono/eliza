@@ -208,7 +208,12 @@ Write-SmokeEvent "preflight.inventory" @{
   shortcutExistsBeforeRun = [bool](Test-Path $contract.ShortcutPath)
 }
 
-$installerArgs = if ($PreferInstaller) { @("/Q") } else { @() }
+$installerLogPath = Join-Path $smokeTempRoot "installer.log"
+$installerArgs = if ($PreferInstaller) {
+  @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/LOG=`"$installerLogPath`"")
+} else {
+  @()
+}
 Write-SmokeEvent "installer.start" @{
   path = $installer.FullName
   arguments = $installerArgs
@@ -239,12 +244,17 @@ while ((Get-Date) -lt $installDeadline) {
   }
 
   if (((Get-Date) - $lastInstallerProgressLog).TotalSeconds -ge 30) {
+    $installerLogTail = $null
+    if (Test-Path $installerLogPath) {
+      $installerLogTail = (Get-Content $installerLogPath -Tail 5 -ErrorAction SilentlyContinue) -join " | "
+    }
     Write-SmokeEvent "installer.wait" @{
       installerStillRunning = -not $installerProcess.HasExited
       installRootReady = $installRootReady
       launcherReady = $launcherReady
       shortcutReady = $shortcutReady
       installRoot = $contract.InstallRoot
+      installerLogTail = $installerLogTail
     }
     $lastInstallerProgressLog = Get-Date
   }
