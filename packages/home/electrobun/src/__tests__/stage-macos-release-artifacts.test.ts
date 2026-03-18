@@ -22,5 +22,8 @@ describe("stage-macos-release-artifacts.sh", () => {
     );
     // biome-ignore lint/suspicious/noTemplateCurlyInString: bash variable expansion in shell script assertion
     expect(script).toContain('"${clang_arch_args[@]}"');
+    expect(script).toContain('detach_volume_if_present()');
+    expect(script).toContain('create_dmg_with_cleanup()');
+    expect(script).toContain('retry_command 3 10 hdiutil create');
   });
 });

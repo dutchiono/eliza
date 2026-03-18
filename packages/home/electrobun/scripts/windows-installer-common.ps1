@@ -85,6 +85,48 @@ function Resolve-ElizaHomeRawBundlePath([string]$BuildDir) {
   return $candidates[0]
 }
 
+function Get-ElizaHomeWindowsPayloadArchiveCandidates(
+  [string]$ArtifactsDir,
+  [string]$BuildDir
+) {
+  $searchRoots = @($ArtifactsDir, $BuildDir) |
+    Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path $_) }
+
+  $candidates = foreach ($root in $searchRoots) {
+    Get-ChildItem -Path $root -Recurse -File -Filter "*-win-*.tar.zst" -ErrorAction SilentlyContinue |
+      Where-Object {
+        $_.Name -notlike "*Setup*" -and
+        $_.FullName -notmatch "[\\/]\.installer[\\/]"
+      } |
+      Select-Object -ExpandProperty FullName
+  }
+
+  return $candidates | Sort-Object Length, FullName -Unique
+}
+
+function Resolve-ElizaHomeWindowsPayloadSource(
+  [string]$ArtifactsDir,
+  [string]$BuildDir
+) {
+  $archiveCandidates = @(Get-ElizaHomeWindowsPayloadArchiveCandidates -ArtifactsDir $ArtifactsDir -BuildDir $BuildDir)
+  if ($archiveCandidates.Count -gt 0) {
+    return [pscustomobject]@{
+      SourceLayer = "packaged_archive"
+      Path = $archiveCandidates[0]
+    }
+  }
+
+  $rawBundleCandidates = @(Get-ElizaHomeRawBundleCandidates -BuildDir $BuildDir)
+  if ($rawBundleCandidates.Count -gt 0) {
+    return [pscustomobject]@{
+      SourceLayer = "raw_bundle_directory"
+      Path = $rawBundleCandidates[0]
+    }
+  }
+
+  throw "Could not find a Windows packaged payload archive under $ArtifactsDir or $BuildDir, and no raw bundle fallback exists."
+}
+
 function New-ElizaHomeStartMenuShortcut(
   [string]$ShortcutPath,
   [string]$TargetPath,

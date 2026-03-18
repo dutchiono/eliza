@@ -15,7 +15,7 @@ $resolvedBuildDir = (Resolve-Path $BuildDir).Path
 New-Item -ItemType Directory -Force -Path $ArtifactsDir | Out-Null
 $resolvedArtifactsDir = (Resolve-Path $ArtifactsDir).Path
 
-$bundleRoot = Resolve-ElizaHomeRawBundlePath -BuildDir $resolvedBuildDir
+$payloadSource = Resolve-ElizaHomeWindowsPayloadSource -ArtifactsDir $resolvedArtifactsDir -BuildDir $resolvedBuildDir
 $assetBaseName = Get-ElizaHomeWindowsAssetBaseName -BuildEnv $BuildEnv
 $outputExe = Join-Path $resolvedArtifactsDir "$assetBaseName.exe"
 
@@ -28,12 +28,34 @@ $sedPath = Join-Path $tempRoot "installer.sed"
 $manifestPath = Join-Path $resolvedArtifactsDir "windows-installer-contract.json"
 
 try {
-  New-Item -ItemType Directory -Force -Path $payloadAppRoot | Out-Null
-  Get-ChildItem -Path $bundleRoot -Force | ForEach-Object {
-    Copy-Item -Path $_.FullName -Destination $payloadAppRoot -Recurse -Force
+  New-Item -ItemType Directory -Force -Path $payloadRoot | Out-Null
+  if ($payloadSource.SourceLayer -eq "packaged_archive") {
+    $archiveExtractRoot = Join-Path $tempRoot "archive-expanded"
+    New-Item -ItemType Directory -Force -Path $archiveExtractRoot | Out-Null
+    & tar.exe --zstd -xf $payloadSource.Path -C $archiveExtractRoot
+    if ($LASTEXITCODE -ne 0) {
+      throw "Failed to extract packaged Windows payload archive: $($payloadSource.Path)"
+    }
+
+    $archiveAppRoot = Get-ChildItem -Path $archiveExtractRoot -Directory -ErrorAction SilentlyContinue |
+      Sort-Object Name |
+      Select-Object -First 1
+    if ($null -eq $archiveAppRoot) {
+      throw "Packaged Windows payload archive did not contain a top-level app directory: $($payloadSource.Path)"
+    }
+
+    Move-Item -Path $archiveAppRoot.FullName -Destination $payloadAppRoot
+  } else {
+    New-Item -ItemType Directory -Force -Path $payloadAppRoot | Out-Null
+    Get-ChildItem -Path $payloadSource.Path -Force | ForEach-Object {
+      Copy-Item -Path $_.FullName -Destination $payloadAppRoot -Recurse -Force
+    }
   }
 
-  Compress-Archive -Path $payloadAppRoot -DestinationPath $payloadZip -CompressionLevel Optimal
+  & tar.exe -a -cf $payloadZip -C $payloadRoot "app"
+  if ($LASTEXITCODE -ne 0 -or -not (Test-Path $payloadZip)) {
+    throw "Failed to create payload zip at $payloadZip"
+  }
 
   $installCmdContents = @"
 @echo off
@@ -97,7 +119,8 @@ SourceFiles0=$tempRoot
     appName = $AppName
     version = $Version
     channel = $contract.Channel
-    rawBundleRoot = $bundleRoot
+    payloadSourceLayer = $payloadSource.SourceLayer
+    payloadSourcePath = $payloadSource.Path
     installerPath = $outputExe
     installRoot = $contract.InstallRoot
     launcherPath = $contract.LauncherPath
@@ -111,7 +134,7 @@ SourceFiles0=$tempRoot
   } | ConvertTo-Json -Depth 8 | Set-Content -Path $manifestPath -Encoding utf8
 
   Write-Host "Built Windows wrapper installer: $outputExe"
-  Write-Host "Raw bundle source: $bundleRoot"
+  Write-Host "Windows payload source ($($payloadSource.SourceLayer)): $($payloadSource.Path)"
   Write-Host "Expected install root: $($contract.InstallRoot)"
 } finally {
   if (Test-Path $tempRoot) {

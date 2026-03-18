@@ -14,6 +14,7 @@ const requiredPaths = [
   "packages/home/electrobun/scripts/build-wrapper-installer.ps1",
   "packages/home/electrobun/scripts/install-windows-wrapper.ps1",
   "packages/home/electrobun/scripts/windows-installer-common.ps1",
+  "packages/home/electrobun/scripts/bin/hdiutil",
 ];
 
 const requiredWorkflowSnippets = [

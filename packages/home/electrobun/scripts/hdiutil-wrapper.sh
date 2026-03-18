@@ -3,6 +3,38 @@ set -euo pipefail
 
 REAL_HDIUTIL="${ELECTROBUN_REAL_HDIUTIL:-/usr/bin/hdiutil}"
 
+cleanup_create_state() {
+  local volume_name=""
+  local target_path=""
+  local args=("$@")
+  local index=0
+
+  while [[ $index -lt ${#args[@]} ]]; do
+    local arg="${args[$index]}"
+    case "$arg" in
+      -volname)
+        ((index += 1))
+        if [[ $index -lt ${#args[@]} ]]; then
+          volume_name="${args[$index]}"
+        fi
+        ;;
+    esac
+    ((index += 1))
+  done
+
+  if [[ ${#args[@]} -gt 0 ]]; then
+    target_path="${args[-1]}"
+  fi
+
+  if [[ -n "$target_path" ]]; then
+    rm -f "$target_path" 2>/dev/null || true
+  fi
+
+  if [[ -n "$volume_name" ]]; then
+    "$REAL_HDIUTIL" detach "/Volumes/$volume_name" >/dev/null 2>&1 || true
+  fi
+}
+
 if [[ "${1:-}" == "create" ]]; then
   attempts=5
   delay=5
@@ -10,6 +42,7 @@ if [[ "${1:-}" == "create" ]]; then
   last_output=""
 
   for ((attempt=1; attempt<=attempts; attempt++)); do
+    cleanup_create_state "$@"
     if output="$("$REAL_HDIUTIL" "$@" 2>&1)"; then
       [[ -n "$output" ]] && printf '%s\n' "$output"
       exit 0

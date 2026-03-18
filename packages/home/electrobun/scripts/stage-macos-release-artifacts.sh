@@ -52,6 +52,32 @@ retry_command() {
   return "$command_status"
 }
 
+detach_volume_if_present() {
+  local volume_name="$1"
+  if [[ -z "$volume_name" ]]; then
+    return 0
+  fi
+
+  hdiutil detach "/Volumes/$volume_name" >/dev/null 2>&1 || true
+}
+
+create_dmg_with_cleanup() {
+  local volume_name="$1"
+  local src_dir="$2"
+  local output_path="$3"
+
+  rm -rf "$src_dir/.Trashes" 2>/dev/null || true
+  rm -f "$output_path" 2>/dev/null || true
+  detach_volume_if_present "$volume_name"
+
+  retry_command 3 10 hdiutil create \
+    -volname "$volume_name" \
+    -srcfolder "$src_dir" \
+    -ov \
+    -format ULFO \
+    "$output_path"
+}
+
 TARBALL_PATH="$(find "$ARTIFACTS_DIR" -maxdepth 1 -type f -name "*-macos-*.app.tar.zst" | sort | head -1)"
 if [[ -z "$TARBALL_PATH" ]]; then
   echo "stage-macos-release-artifacts: no macOS updater tarball found in $ARTIFACTS_DIR"
@@ -157,12 +183,7 @@ ditto "$STAGED_APP_PATH" "$DMG_STAGING_DIR/$(basename "$STAGED_APP_PATH")"
 ln -s /Applications "$DMG_STAGING_DIR/Applications"
 
 rm -f "$FINAL_DMG_PATH"
-hdiutil create \
-  -volname "$VOLUME_NAME" \
-  -srcfolder "$DMG_STAGING_DIR" \
-  -ov \
-  -format ULFO \
-  "$TEMP_DMG_PATH"
+create_dmg_with_cleanup "$VOLUME_NAME" "$DMG_STAGING_DIR" "$TEMP_DMG_PATH"
 
 if [[ "$SKIP_SIGNATURE_CHECK" != "1" && -n "${ELECTROBUN_DEVELOPER_ID:-}" ]]; then
   codesign --force --timestamp --sign "$ELECTROBUN_DEVELOPER_ID" "$TEMP_DMG_PATH"
