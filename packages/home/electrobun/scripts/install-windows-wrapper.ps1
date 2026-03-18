@@ -28,7 +28,10 @@ $stageExtractDir = Join-Path $stageRoot "expanded"
 
 try {
   New-Item -ItemType Directory -Force -Path $stageExtractDir | Out-Null
-  Expand-Archive -Path $payloadPath -DestinationPath $stageExtractDir -Force
+  & tar.exe -xf $payloadPath -C $stageExtractDir
+  if ($LASTEXITCODE -ne 0) {
+    throw "Failed to extract payload archive: $payloadPath"
+  }
 
   $payloadAppRoot = Join-Path $stageExtractDir "app"
   if (-not (Test-Path $payloadAppRoot)) {

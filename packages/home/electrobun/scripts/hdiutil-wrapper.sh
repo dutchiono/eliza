@@ -23,7 +23,8 @@ cleanup_create_state() {
   done
 
   if [[ ${#args[@]} -gt 0 ]]; then
-    target_path="${args[-1]}"
+    local last_index=$((${#args[@]} - 1))
+    target_path="${args[$last_index]}"
   fi
 
   if [[ -n "$target_path" ]]; then
