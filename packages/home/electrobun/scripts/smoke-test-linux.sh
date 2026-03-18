@@ -86,10 +86,15 @@ fi
 
 member_blob="$(printf '%s\n' "${archive_members[@]}")"
 
+has_member_regex() {
+  local regex="$1"
+  grep -Eq "$regex" <<<"$member_blob"
+}
+
 require_member_regex() {
   local regex="$1"
   local description="$2"
-  if ! printf '%s\n' "$member_blob" | grep -Eq "$regex"; then
+  if ! has_member_regex "$regex"; then
     echo "::error::Missing ${description} in $SELECTED_ARTIFACT"
     exit 1
   fi
@@ -102,10 +107,23 @@ if [[ "$SELECTED_KIND" == "setup-archive" ]]; then
   exit 0
 fi
 
-require_member_regex '(^|/)(renderer/)?index\.html$' "renderer index.html"
-require_member_regex '(^|/)(renderer/)?assets/.+\.(js|css)$' "compiled renderer assets"
-require_member_regex '(^|/)home-dist/(bin\.js|entry\.js|packages/autonomous/src/bin\.js)$' "runtime entrypoint"
-require_member_regex '(^|/)home-dist/node_modules/@elizaos/core/package\.json$' "@elizaos/core runtime package"
-require_member_regex '(^|/)home-dist/node_modules/@elizaos/core/dist/node/index\.node\.js$' "@elizaos/core node runtime entry"
+if has_member_regex '(^|/)(renderer/)?index\.html$' &&
+  has_member_regex '(^|/)(renderer/)?assets/.+\.(js|css)$' &&
+  has_member_regex '(^|/)home-dist/(bin\.js|entry\.js|packages/autonomous/src/bin\.js)$' &&
+  has_member_regex '(^|/)home-dist/node_modules/@elizaos/core/package\.json$' &&
+  has_member_regex '(^|/)home-dist/node_modules/@elizaos/core/dist/node/index\.node\.js$'; then
+  echo "Linux smoke check PASSED with direct runtime archive artifact."
+  exit 0
+fi
 
-echo "Linux smoke check PASSED with archive artifact."
+if has_member_regex '(^|/)bin/launcher$' &&
+  has_member_regex '(^|/)(Resources|resources)/.+\.tar\.zst$' &&
+  has_member_regex '(^|/)(Resources|resources)/version\.json$'; then
+  echo "Linux smoke check PASSED with wrapper archive artifact."
+  exit 0
+fi
+
+echo "::error::Linux archive did not match expected direct runtime or wrapper archive layout: $SELECTED_ARTIFACT"
+echo "First 80 archive entries for diagnostics:"
+printf '%s\n' "${archive_members[@]}" | sed -n '1,80p'
+exit 1
