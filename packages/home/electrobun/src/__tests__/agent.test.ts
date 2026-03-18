@@ -310,7 +310,9 @@ describe("AgentManager", () => {
       expect(status.state).toBe("running");
       expect(mockSpawn).toHaveBeenCalledTimes(1);
       const spawnArgs = mockSpawn.mock.calls[0];
-      expect(spawnArgs[0][2]).toBe("/mock/home-dist/packages/autonomous/src/bin.js");
+      expect(spawnArgs[0][2]).toBe(
+        "/mock/home-dist/packages/autonomous/src/bin.js",
+      );
     });
 
     it("rejects embedded startup in external mode", async () => {
