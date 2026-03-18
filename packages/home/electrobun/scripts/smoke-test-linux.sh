@@ -31,9 +31,13 @@ echo ""
 
 find_first_by_pattern() {
   local pattern="$1"
+  local excluded_pattern="${2:-}"
   local candidate=""
   while IFS= read -r candidate; do
     [[ -n "$candidate" ]] || continue
+    if [[ -n "$excluded_pattern" && "$(basename "$candidate")" == $excluded_pattern ]]; then
+      continue
+    fi
     if [[ -s "$candidate" ]]; then
       echo "$candidate"
       return 0
@@ -47,14 +51,14 @@ SELECTED_KIND=""
 
 if SELECTED_ARTIFACT="$(find_first_by_pattern "*.AppImage")"; then
   SELECTED_KIND="appimage"
+elif SELECTED_ARTIFACT="$(find_first_by_pattern "*.tar.zst" "*Setup*")"; then
+  SELECTED_KIND="archive"
+elif SELECTED_ARTIFACT="$(find_first_by_pattern "*.tar.gz" "*Setup*")"; then
+  SELECTED_KIND="archive"
 elif SELECTED_ARTIFACT="$(find_first_by_pattern "*Setup*.tar.zst")"; then
   SELECTED_KIND="setup-archive"
 elif SELECTED_ARTIFACT="$(find_first_by_pattern "*Setup*.tar.gz")"; then
   SELECTED_KIND="setup-archive"
-elif SELECTED_ARTIFACT="$(find_first_by_pattern "*.tar.zst")"; then
-  SELECTED_KIND="archive"
-elif SELECTED_ARTIFACT="$(find_first_by_pattern "*.tar.gz")"; then
-  SELECTED_KIND="archive"
 else
   echo "::error::No Linux launchable artifact found (.AppImage, *Setup*.tar.{zst,gz}, or *.tar.{zst,gz})."
   exit 1
@@ -91,9 +95,17 @@ require_member_regex() {
   fi
 }
 
+if [[ "$SELECTED_KIND" == "setup-archive" ]]; then
+  require_member_regex '(^|/)(launcher|launcher\.exe)$' "packaged launcher binary"
+  require_member_regex '(^|/)(resources/)?app/.+|(^|/)Resources/.+|(^|/).+\.desktop$' "packaged app payload markers"
+  echo "Linux smoke check PASSED with setup archive artifact."
+  exit 0
+fi
+
 require_member_regex '(^|/)(renderer/)?index\.html$' "renderer index.html"
 require_member_regex '(^|/)(renderer/)?assets/.+\.(js|css)$' "compiled renderer assets"
 require_member_regex '(^|/)home-dist/(bin\.js|entry\.js|packages/autonomous/src/bin\.js)$' "runtime entrypoint"
 require_member_regex '(^|/)home-dist/node_modules/@elizaos/core/package\.json$' "@elizaos/core runtime package"
+require_member_regex '(^|/)home-dist/node_modules/@elizaos/core/dist/node/index\.node\.js$' "@elizaos/core node runtime entry"
 
 echo "Linux smoke check PASSED with archive artifact."

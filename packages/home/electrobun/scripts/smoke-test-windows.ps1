@@ -93,7 +93,8 @@ function Test-PackagedRuntimeSurface([string]$RuntimeRoot) {
   }
 
   $requiredPaths = @(
-    (Join-Path $RuntimeRoot "node_modules\\@elizaos\\core\\package.json")
+    (Join-Path $RuntimeRoot "node_modules\\@elizaos\\core\\package.json"),
+    (Join-Path $RuntimeRoot "node_modules\\@elizaos\\core\\dist\\node\\index.node.js")
   )
   foreach ($requiredPath in $requiredPaths) {
     if (-not (Test-Path $requiredPath)) {
@@ -106,7 +107,7 @@ const { createRequire } = require("node:module");
 const path = require("node:path");
 const runtimeRoot = process.argv[1];
 const req = createRequire(path.join(runtimeRoot, "package.json"));
-for (const moduleName of ["@elizaos/core/package.json"]) {
+for (const moduleName of ["@elizaos/core", "@elizaos/core/package.json"]) {
   process.stdout.write(`${moduleName} => ${req.resolve(moduleName)}\n`);
 }
 '@

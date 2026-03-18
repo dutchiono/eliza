@@ -167,6 +167,23 @@ function ensureAppDirs() {
   }
 }
 
+function assertRuntimeCoreEntry() {
+  const requiredCoreEntry = path.join(
+    RUNTIME_DIST_DIR,
+    "node_modules",
+    "@elizaos",
+    "core",
+    "dist",
+    "node",
+    "index.node.js",
+  );
+  if (!fs.existsSync(requiredCoreEntry)) {
+    fail(
+      `Staged runtime is missing @elizaos/core node entry: ${requiredCoreEntry}`,
+    );
+  }
+}
+
 function stageDesktopBuild() {
   ensureAppDirs();
 
@@ -222,6 +239,7 @@ function stageDesktopBuild() {
       label: "Bundling runtime node_modules into packages/autonomous/dist",
     },
   );
+  assertRuntimeCoreEntry();
 
   runPackageBinary("vite", ["build"], {
     cwd: HOME_DIR,

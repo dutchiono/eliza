@@ -58,6 +58,7 @@ const TRACKED_PACKAGE_CACHE = path.join(
 );
 const DEP_SKIP = new Set(["typescript", "@types/node", "lucide-react"]);
 const ALWAYS_HOISTED_PACKAGES = new Set(["@elizaos/core"]);
+const FORCE_WORKSPACE_RUNTIME_PACKAGES = new Set(["@elizaos/core"]);
 const PACKAGED_DEPENDENCY_SKIPS = new Map<string, Set<string>>([
   [
     "@elizaos/plugin-cron",
@@ -727,6 +728,11 @@ function resolvePackage(
   const candidates = collectResolvedCandidates(name, requesterDir);
   const selected = selectResolvedCandidate(candidates, requestedSpec);
   if (selected) return selected;
+  if (FORCE_WORKSPACE_RUNTIME_PACKAGES.has(name) && candidates.length > 0) {
+    // Keep core runtime dependencies sourced from workspace-installed builds.
+    // Avoid registry fallback drift for exact release-aligned versions.
+    return candidates[0];
+  }
 
   if (canFetchPublishedPackage(requestedSpec)) {
     const fetched = fetchPublishedPackage(name, requestedSpec);
@@ -749,6 +755,9 @@ function resolvePackage(
       inferVersionFromBunEntryPath(realSourceDir) ??
       inferVersionFromBunEntryPath(sourceDir);
     if (!version) continue;
+    if (FORCE_WORKSPACE_RUNTIME_PACKAGES.has(name)) {
+      continue;
+    }
 
     const fetched = fetchPublishedPackage(name, version);
     if (fetched) return fetched;
