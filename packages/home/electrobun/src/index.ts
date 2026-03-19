@@ -223,6 +223,23 @@ let rendererUrlPromise: Promise<string> | null = null;
 let backgroundWindowPromise: Promise<void> | null = null;
 let isQuitting = false;
 
+type CloseBehavior = "quit" | "tray";
+
+function resolveCloseBehavior(): CloseBehavior {
+  const raw = process.env.MILADY_WINDOW_CLOSE_BEHAVIOR?.trim().toLowerCase();
+  if (raw === "quit" || raw === "exit") {
+    return "quit";
+  }
+  if (raw === "tray" || raw === "minimize") {
+    return "tray";
+  }
+
+  // Windows users expect close to fully exit unless explicitly configured otherwise.
+  return process.platform === "win32" ? "quit" : "tray";
+}
+
+const closeBehavior = resolveCloseBehavior();
+
 function sendToActiveRenderer(message: string, payload?: unknown): void {
   currentSendToWebview?.(message, payload);
 }
@@ -446,6 +463,13 @@ function attachMainWindow(win: BrowserWindow): BrowserWindow {
   });
 
   win.on("close", () => {
+    if (!isQuitting && closeBehavior === "quit") {
+      isQuitting = true;
+      console.log("[Main] Window close requested; quitting app (closeBehavior=quit)");
+      Utils.quit();
+      return;
+    }
+
     if (currentWindow?.id === win.id) {
       currentWindow = null;
       currentSendToWebview = null;
