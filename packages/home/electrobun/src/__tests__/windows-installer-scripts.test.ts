@@ -44,13 +44,18 @@ describe("smoke-test-windows.ps1", () => {
 describe("windows-installer-common.ps1", () => {
   it("uses the short LocalAppData install root for Windows compatibility", () => {
     const script = fs.readFileSync(
-      path.resolve(import.meta.dirname, "../../scripts/windows-installer-common.ps1"),
+      path.resolve(
+        import.meta.dirname,
+        "../../scripts/windows-installer-common.ps1",
+      ),
       "utf8",
     );
 
     expect(script).toContain('Join-Path $LocalAppData "EH"');
     expect(script).toContain("AppRoot = $appRoot");
-    expect(script).toContain('LauncherPath = Join-Path $appRoot "bin\\launcher.exe"');
+    expect(script).toContain(
+      'LauncherPath = Join-Path $appRoot "bin\\launcher.exe"',
+    );
     expect(script).toContain("Get-ElizaHomeInstalledPathLayoutDiagnostic");
   });
 });
