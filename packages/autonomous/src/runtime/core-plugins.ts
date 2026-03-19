@@ -19,7 +19,6 @@ export const CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-shell", // shell command execution
   "@elizaos/plugin-plugin-manager", // dynamic plugin management
   "@elizaos/plugin-agent-skills", // skill execution and marketplace runtime
-  "@elizaos/plugin-pdf", // PDF processing
   "@elizaos/plugin-trust", // trust scoring and policy signals
   "@elizaos/plugin-todo", // todo/task management
   "@elizaos/plugin-personality", // personality coherence
@@ -45,6 +44,7 @@ export const OPTIONAL_CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-twitch", // Twitch integration
   "@elizaos/plugin-edge-tts", // text-to-speech (Microsoft Edge TTS)
   "@elizaos/plugin-elevenlabs", // ElevenLabs text-to-speech
+  "@elizaos/plugin-pdf", // PDF processing
   // "@elizaos/plugin-directives", // directive processing - not yet ready
   // "@elizaos/plugin-commands", // slash command handling - not yet ready
   // "@elizaos/plugin-mcp", // MCP protocol support - not yet ready
