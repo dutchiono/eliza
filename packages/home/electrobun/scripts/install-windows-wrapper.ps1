@@ -43,7 +43,9 @@ try {
   }
 
   New-Item -ItemType Directory -Force -Path $contract.InstallRoot | Out-Null
-  Copy-Item -Path $payloadAppRoot -Destination $contract.AppRoot -Recurse -Force
+  Get-ChildItem -Path $payloadAppRoot -Force | ForEach-Object {
+    Copy-Item -Path $_.FullName -Destination $contract.InstallRoot -Recurse -Force
+  }
 
   if (-not (Test-Path $contract.LauncherPath)) {
     throw "Installed launcher missing after copy: $($contract.LauncherPath)"

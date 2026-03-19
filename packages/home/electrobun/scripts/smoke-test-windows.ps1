@@ -91,6 +91,14 @@ function Find-InstallerExecutable([string]$ResolvedArtifactsDir, [string]$Tempor
     Select-Object -First 1
 }
 
+function Get-InstallerLogTail([string]$InstallerLogPath, [int]$LineCount = 20) {
+  if ([string]::IsNullOrWhiteSpace($InstallerLogPath) -or -not (Test-Path $InstallerLogPath)) {
+    return $null
+  }
+
+  return (Get-Content $InstallerLogPath -Tail $LineCount -ErrorAction SilentlyContinue) -join " | "
+}
+
 function Stop-ElizaHomeProcesses() {
   Get-Process -ErrorAction SilentlyContinue |
     Where-Object {
@@ -290,22 +298,19 @@ while ((Get-Date) -lt $installDeadline) {
     Write-SmokeEvent "installer.exit" @{
       code = $installerProcess.ExitCode
       warning = $false
+      installerLogTail = Get-InstallerLogTail -InstallerLogPath $installerLogPath
     }
     break
   }
 
   if (((Get-Date) - $lastInstallerProgressLog).TotalSeconds -ge 30) {
-    $installerLogTail = $null
-    if (Test-Path $installerLogPath) {
-      $installerLogTail = (Get-Content $installerLogPath -Tail 5 -ErrorAction SilentlyContinue) -join " | "
-    }
     Write-SmokeEvent "installer.wait" @{
       installerStillRunning = -not $installerProcess.HasExited
       installRootReady = $installRootReady
       launcherReady = $launcherReady
       shortcutReady = $shortcutReady
       installRoot = $contract.InstallRoot
-      installerLogTail = $installerLogTail
+      installerLogTail = Get-InstallerLogTail -InstallerLogPath $installerLogPath -LineCount 5
     }
     $lastInstallerProgressLog = Get-Date
   }
@@ -318,6 +323,7 @@ if (-not $installRootReady) {
     reason = if ($installerProcess.HasExited) { "install-root-missing" } else { "install-timeout" }
     installRoot = $contract.InstallRoot
     installerExitCode = if ($installerProcess.HasExited) { $installerProcess.ExitCode } else { $null }
+    installerLogTail = Get-InstallerLogTail -InstallerLogPath $installerLogPath
   }
   throw "Windows installer did not produce install root within $InstallTimeoutSeconds seconds: $($contract.InstallRoot)"
 }

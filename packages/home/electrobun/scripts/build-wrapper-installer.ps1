@@ -105,6 +105,16 @@ try {
     iconPath = $inspection.iconPath
     iconCandidates = $inspection.iconCandidates
   }
+  $installedLayout = Get-ElizaHomeInstalledPathLayoutDiagnostic -PayloadAppRoot $inspection.appRoot -InstallRoot $contract.InstallRoot
+  $manifest.installLayout = [ordered]@{
+    fileCount = $installedLayout.fileCount
+    maxAllowedLength = $installedLayout.maxAllowedLength
+    maxInstalledLength = $installedLayout.maxInstalledLength
+    maxInstalledPath = $installedLayout.maxInstalledPath
+    maxRelativePath = $installedLayout.maxRelativePath
+    withinLimit = $installedLayout.withinLimit
+    overflow = $installedLayout.overflow
+  }
   $manifest.pathDiagnostics = [ordered]@{
     payloadSource = Get-ElizaHomePathDiagnostic $payloadSource.Path
     stagingRoot = Get-ElizaHomePathDiagnostic $tempRoot
@@ -114,6 +124,7 @@ try {
     outputExe = Get-ElizaHomePathDiagnostic $outputExe
     installRoot = Get-ElizaHomePathDiagnostic $contract.InstallRoot
     shortcutPath = Get-ElizaHomePathDiagnostic $contract.ShortcutPath
+    longestInstalledPath = Get-ElizaHomePathDiagnostic $installedLayout.maxInstalledPath
   }
 
   $validationFailures = [System.Collections.Generic.List[string]]::new()
@@ -123,6 +134,9 @@ try {
   if (-not $inspection.runtimeExists) {
     $candidateSummary = ($inspection.runtimeRootCandidates | ForEach-Object { $_ }) -join ", "
     $validationFailures.Add("staged-runtime-missing: $candidateSummary")
+  }
+  if (-not $installedLayout.withinLimit) {
+    $validationFailures.Add("installed-path-too-long: $($installedLayout.maxInstalledLength) > $($installedLayout.maxAllowedLength) :: $($installedLayout.maxInstalledPath)")
   }
 
   $iconPath = $inspection.iconPath

@@ -82,12 +82,9 @@ function Get-ElizaHomeWindowsInstallContract(
   [string]$AppData = $env:APPDATA
 ) {
   $channel = Get-ElizaHomeWindowsChannelLabel -BuildEnv $BuildEnv
-  $programsRoot = Join-Path $LocalAppData "Programs\Eliza Home"
-  $installRoot = if ($channel -eq "stable") {
-    $programsRoot
-  } else {
-    Join-Path $programsRoot $channel
-  }
+  # Keep the installed root short enough for Win10/11 systems where long paths are still off.
+  $programsRoot = Join-Path $LocalAppData "EH"
+  $installRoot = Join-Path $programsRoot $channel
 
   $shortcutDisplay = if ($channel -eq "stable") {
     "Eliza Home"
@@ -97,7 +94,7 @@ function Get-ElizaHomeWindowsInstallContract(
   }
 
   $startMenuDir = Join-Path $AppData "Microsoft\Windows\Start Menu\Programs\Eliza Home"
-  $appRoot = Join-Path $installRoot "app"
+  $appRoot = $installRoot
 
   [pscustomobject]@{
     Channel = $channel
@@ -226,6 +223,57 @@ function Get-ElizaHomeWindowsPayloadInspection([string]$AppRoot) {
     iconCandidates = $iconCandidates
     launcherExists = [bool](Test-Path $launcherPath)
     runtimeExists = [bool]($runtime.runtimeRoot -and (Test-Path $runtime.runtimeRoot))
+  }
+}
+
+function Get-ElizaHomeInstalledPathLayoutDiagnostic(
+  [string]$PayloadAppRoot,
+  [string]$InstallRoot
+) {
+  $resolvedPayloadAppRoot = Get-ElizaHomeCanonicalPath $PayloadAppRoot
+  $resolvedInstallRoot = Get-ElizaHomeCanonicalPath $InstallRoot
+  $maxAllowedLength = 259
+  $fileCount = 0
+  $maxInstalledLength = 0
+  $maxInstalledPath = $null
+  $maxRelativePath = $null
+
+  if (-not (Test-Path $resolvedPayloadAppRoot)) {
+    return [pscustomobject]@{
+      payloadAppRoot = $resolvedPayloadAppRoot
+      installRoot = $resolvedInstallRoot
+      fileCount = 0
+      maxAllowedLength = $maxAllowedLength
+      maxInstalledLength = 0
+      maxInstalledPath = $null
+      maxRelativePath = $null
+      withinLimit = $false
+      overflow = 0
+    }
+  }
+
+  Get-ChildItem -Path $resolvedPayloadAppRoot -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object {
+    $fileCount += 1
+    $relativePath = $_.FullName.Substring($resolvedPayloadAppRoot.Length).TrimStart('\', '/')
+    $installedPath = Join-Path $resolvedInstallRoot $relativePath
+    $installedLength = $installedPath.Length
+    if ($installedLength -gt $maxInstalledLength) {
+      $maxInstalledLength = $installedLength
+      $maxInstalledPath = $installedPath
+      $maxRelativePath = $relativePath
+    }
+  }
+
+  return [pscustomobject]@{
+    payloadAppRoot = $resolvedPayloadAppRoot
+    installRoot = $resolvedInstallRoot
+    fileCount = $fileCount
+    maxAllowedLength = $maxAllowedLength
+    maxInstalledLength = $maxInstalledLength
+    maxInstalledPath = $maxInstalledPath
+    maxRelativePath = $maxRelativePath
+    withinLimit = ($maxInstalledLength -le $maxAllowedLength)
+    overflow = [Math]::Max(0, $maxInstalledLength - $maxAllowedLength)
   }
 }
 
