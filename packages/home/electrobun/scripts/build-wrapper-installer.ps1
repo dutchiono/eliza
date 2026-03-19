@@ -57,7 +57,12 @@ $manifest = [ordered]@{
 }
 
 try {
+  $manifest | ConvertTo-Json -Depth 8 | Set-Content -Path $manifestPath -Encoding utf8
+
   if (-not $innoCompiler) {
+    $manifest.validationStatus = "failed"
+    $manifest.validationErrors = @("missing-inno-compiler")
+    $manifest | ConvertTo-Json -Depth 8 | Set-Content -Path $manifestPath -Encoding utf8
     throw "Could not find Inno Setup compiler (ISCC.exe)."
   }
 
@@ -129,7 +134,7 @@ try {
   $workingDirRelative = "bin"
   $outputDirEscaped = $resolvedArtifactsDir.Replace('\', '\\')
   $payloadSourceEscaped = $inspection.appRoot.Replace('\', '\\')
-  $iconDirective = if (Test-Path $iconPath) {
+  $iconDirective = if (-not [string]::IsNullOrWhiteSpace($iconPath) -and (Test-Path $iconPath)) {
     "SetupIconFile=$($iconPath.Replace('\', '\\'))"
   } else {
     ""
