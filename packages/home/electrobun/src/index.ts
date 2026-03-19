@@ -465,7 +465,9 @@ function attachMainWindow(win: BrowserWindow): BrowserWindow {
   win.on("close", () => {
     if (!isQuitting && closeBehavior === "quit") {
       isQuitting = true;
-      console.log("[Main] Window close requested; quitting app (closeBehavior=quit)");
+      console.log(
+        "[Main] Window close requested; quitting app (closeBehavior=quit)",
+      );
       Utils.quit();
       return;
     }
