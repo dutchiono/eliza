@@ -631,7 +631,7 @@ jobs:
             Remove-Item $_.FullName -Force
           }
           Get-ChildItem -Path $artifactsDir -Filter "*.zip" |
-            Where-Object { $_.Name -notlike "*win*x64*Setup*.zip" } |
+            Where-Object { $_.Name -notlike "*win*x64*Setup*.exe.zip" } |
             Remove-Item -Force
 
       - name: Upload build artifacts
@@ -641,7 +641,7 @@ jobs:
           name: home-electrobun-${{ matrix.platform.artifact-name }}
           path: |
             packages/home/electrobun/artifacts/*.dmg
-            packages/home/electrobun/artifacts/*win*x64*Setup*.zip
+            packages/home/electrobun/artifacts/*win*x64*Setup*.exe.zip
             packages/home/electrobun/artifacts/*.tar.zst
             packages/home/electrobun/artifacts/*.tar.gz
             packages/home/electrobun/artifacts/*-update.json
@@ -683,7 +683,7 @@ jobs:
           mkdir -p release-files
           find release-artifacts -type f \( \
             -name "*.dmg" -o \
-            -name "*win*x64*Setup*.zip" -o \
+            -name "*win*x64*Setup*.exe.zip" -o \
             -name "*.tar.gz" -o \
             -name "*.AppImage" \
           \) -exec cp {} release-files/ \; 2>/dev/null || true
@@ -695,7 +695,7 @@ jobs:
         shell: bash
         run: |
           shopt -s nullglob
-          windows_setup_zips=(release-files/*win*x64*Setup*.zip)
+          windows_setup_zips=(release-files/*win*x64*Setup*.exe.zip)
           if [ ${#windows_setup_zips[@]} -ne 1 ]; then
             echo "::error::Expected exactly one canonical Windows setup zip in release-files, found ${#windows_setup_zips[@]}."
             ls -lh release-files || true
