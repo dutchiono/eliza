@@ -161,6 +161,26 @@ function Get-ObservedBackendPorts([int]$DefaultPort, [string]$StartupLog) {
   return $ports.ToArray()
 }
 
+function Test-IsFatalStartupLogLine([string]$Line) {
+  if ([string]::IsNullOrWhiteSpace($Line)) {
+    return $false
+  }
+
+  if ($Line -match "Child process exited with code|Failed to start:|Unhandled rejection") {
+    return $true
+  }
+
+  if ($Line -match "Cannot find module '([^']+)'") {
+    $missingModule = $Matches[1]
+    if ($missingModule -like "@elizaos/plugin-*" -or $missingModule -like "@lunchtable/plugin-*") {
+      return $false
+    }
+    return $true
+  }
+
+  return $false
+}
+
 $resolvedArtifactsDir = (Resolve-Path $ArtifactsDir).Path
 $resolvedBuildDir = $null
 try {
@@ -353,6 +373,13 @@ if (-not (Test-Path $contract.RuntimeRoot)) {
   }
 }
 
+if (Test-Path $startupLog) {
+  Remove-Item -Path $startupLog -Force -ErrorAction SilentlyContinue
+  Write-SmokeEvent "startup-log.reset" @{
+    path = $startupLog
+  }
+}
+
 $launcherProcess = Start-Process -FilePath $contract.LauncherPath -WorkingDirectory (Split-Path -Parent $contract.LauncherPath) -PassThru
 Write-SmokeEvent "launcher.start" @{
   path = $contract.LauncherPath
@@ -371,9 +398,10 @@ try {
 
     if (Test-Path $startupLog) {
       $recentLog = Get-Content $startupLog -Tail 200 -ErrorAction SilentlyContinue
-      if ($recentLog -match 'Cannot find module|Child process exited with code|Failed to start:') {
+      $fatalLines = @($recentLog | Where-Object { Test-IsFatalStartupLogLine $_ })
+      if ($fatalLines.Count -gt 0) {
         Write-Host "Recent startup log:"
-        $recentLog
+        $fatalLines | Select-Object -Last 40
         Write-SmokeEvent "contract.failure" @{
           reason = "backend-startup-error"
         }
