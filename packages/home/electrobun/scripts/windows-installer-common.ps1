@@ -1,5 +1,64 @@
 Set-StrictMode -Version Latest
 
+function Get-ElizaHomeCanonicalPath([string]$Value) {
+  if ([string]::IsNullOrWhiteSpace($Value)) {
+    return $null
+  }
+
+  try {
+    return [System.IO.Path]::GetFullPath($Value)
+  } catch {
+    return $Value
+  }
+}
+
+function Get-ElizaHomePathDiagnostic([string]$PathValue) {
+  $resolvedPath = Get-ElizaHomeCanonicalPath $PathValue
+  if ([string]::IsNullOrWhiteSpace($resolvedPath)) {
+    return [pscustomobject]@{
+      path = $PathValue
+      canonicalPath = $resolvedPath
+      length = 0
+      risk = "unknown"
+    }
+  }
+
+  $length = $resolvedPath.Length
+  $risk = if ($length -ge 250) {
+    "high"
+  } elseif ($length -ge 220) {
+    "warning"
+  } else {
+    "ok"
+  }
+
+  return [pscustomobject]@{
+    path = $PathValue
+    canonicalPath = $resolvedPath
+    length = $length
+    risk = $risk
+  }
+}
+
+function New-ElizaHomeWindowsShortTempRoot([string]$Prefix = "ehw") {
+  $baseRoot = if ($env:ELIZA_HOME_WINDOWS_TEMP_ROOT) {
+    $env:ELIZA_HOME_WINDOWS_TEMP_ROOT
+  } elseif (Test-Path "C:\t") {
+    "C:\t"
+  } else {
+    "C:\t"
+  }
+
+  if (-not (Test-Path $baseRoot)) {
+    New-Item -ItemType Directory -Force -Path $baseRoot | Out-Null
+  }
+
+  $guid = [Guid]::NewGuid().ToString("N").Substring(0, 10)
+  $root = Join-Path $baseRoot "$Prefix\$guid"
+  New-Item -ItemType Directory -Force -Path $root | Out-Null
+  return (Get-ElizaHomeCanonicalPath $root)
+}
+
 function Get-ElizaHomeWindowsChannelLabel([string]$BuildEnv) {
   if ([string]::IsNullOrWhiteSpace($BuildEnv)) {
     return "canary"
@@ -125,6 +184,49 @@ function Resolve-ElizaHomeWindowsPayloadSource(
   }
 
   throw "Could not find a Windows packaged payload archive under $ArtifactsDir or $BuildDir, and no raw bundle fallback exists."
+}
+
+function Resolve-ElizaHomeWindowsRuntimeRoot([string]$AppRoot) {
+  $candidates = @(
+    (Join-Path $AppRoot "resources\app\home-dist"),
+    (Join-Path $AppRoot "Resources\app\home-dist")
+  )
+
+  foreach ($candidate in $candidates) {
+    if (Test-Path $candidate) {
+      return [pscustomobject]@{
+        runtimeRoot = $candidate
+        candidates = $candidates
+      }
+    }
+  }
+
+  return [pscustomobject]@{
+    runtimeRoot = $null
+    candidates = $candidates
+  }
+}
+
+function Get-ElizaHomeWindowsPayloadInspection([string]$AppRoot) {
+  $resolvedAppRoot = Get-ElizaHomeCanonicalPath $AppRoot
+  $launcherPath = Join-Path $resolvedAppRoot "bin\launcher.exe"
+  $runtime = Resolve-ElizaHomeWindowsRuntimeRoot -AppRoot $resolvedAppRoot
+  $iconCandidates = @(
+    (Join-Path $resolvedAppRoot "resources\appIcon.ico"),
+    (Join-Path $resolvedAppRoot "Resources\appIcon.ico")
+  )
+  $iconPath = $iconCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+  [pscustomobject]@{
+    appRoot = $resolvedAppRoot
+    launcherPath = $launcherPath
+    runtimeRoot = $runtime.runtimeRoot
+    runtimeRootCandidates = $runtime.candidates
+    iconPath = $iconPath
+    iconCandidates = $iconCandidates
+    launcherExists = [bool](Test-Path $launcherPath)
+    runtimeExists = [bool]($runtime.runtimeRoot -and (Test-Path $runtime.runtimeRoot))
+  }
 }
 
 function New-ElizaHomeStartMenuShortcut(

@@ -589,6 +589,14 @@ jobs:
               }
             }
           }
+          $issPath = Join-Path $PWD "packages/home/electrobun/artifacts/windows-installer.iss"
+          if (Test-Path $issPath) {
+            Copy-Item -Path $issPath -Destination (Join-Path $diagDir "windows-installer.iss") -Force
+          }
+          $compilerLogPath = Join-Path $PWD "packages/home/electrobun/artifacts/windows-installer-build.log"
+          if (Test-Path $compilerLogPath) {
+            Copy-Item -Path $compilerLogPath -Destination (Join-Path $diagDir "windows-installer-build.log") -Force
+          }
           Get-ChildItem -Path "packages/home/electrobun/build" -Recurse -File -Filter "wrapper-diagnostics.json" -ErrorAction SilentlyContinue | ForEach-Object {
             Copy-Item -Path $_.FullName -Destination (Join-Path $diagDir "wrapper-diagnostics.json") -Force
           }
@@ -639,6 +647,9 @@ jobs:
             packages/home/electrobun/artifacts/*-update.json
             packages/home/electrobun/artifacts/*.patch
             packages/home/electrobun/artifacts/*.AppImage
+            packages/home/electrobun/artifacts/windows-installer-contract.json
+            packages/home/electrobun/artifacts/windows-installer.iss
+            packages/home/electrobun/artifacts/windows-installer-build.log
             packages/home/electrobun/artifacts/smoke-diagnostics/**
           if-no-files-found: error
           retention-days: 30

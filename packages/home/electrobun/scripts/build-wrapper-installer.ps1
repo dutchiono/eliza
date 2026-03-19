@@ -18,27 +18,56 @@ $resolvedArtifactsDir = (Resolve-Path $ArtifactsDir).Path
 $payloadSource = Resolve-ElizaHomeWindowsPayloadSource -ArtifactsDir $resolvedArtifactsDir -BuildDir $resolvedBuildDir
 $assetBaseName = Get-ElizaHomeWindowsAssetBaseName -BuildEnv $BuildEnv
 $outputExe = Join-Path $resolvedArtifactsDir "$assetBaseName.exe"
-$iconPath = Join-Path $PSScriptRoot "..\assets\appIcon.ico"
-
-$tempRoot = Join-Path $env:TEMP ("eliza-home-wrapper-installer-" + [Guid]::NewGuid().ToString("N"))
-$payloadRoot = Join-Path $tempRoot "payload"
-$payloadAppRoot = Join-Path $payloadRoot "app"
-$issPath = Join-Path $tempRoot "eliza-home-installer.iss"
 $manifestPath = Join-Path $resolvedArtifactsDir "windows-installer-contract.json"
+$issOutputPath = Join-Path $resolvedArtifactsDir "windows-installer.iss"
+$compilerLogPath = Join-Path $resolvedArtifactsDir "windows-installer-build.log"
+$tempRoot = New-ElizaHomeWindowsShortTempRoot -Prefix "ehw"
+$payloadRoot = Join-Path $tempRoot "p"
+$payloadAppRoot = Join-Path $payloadRoot "app"
+$issPath = Join-Path $tempRoot "wrapper.iss"
 $innoCompiler = @(
   $env:INNO_SETUP_ISCC,
   (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"),
   (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe")
 ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path $_) } | Select-Object -First 1
+$contract = Get-ElizaHomeWindowsInstallContract -BuildEnv $BuildEnv
+$manifest = [ordered]@{
+  appName = $AppName
+  version = $Version
+  channel = $contract.Channel
+  installerType = "inno-setup"
+  payloadSourceLayer = $payloadSource.SourceLayer
+  payloadSourcePath = $payloadSource.Path
+  stagingRoot = $tempRoot
+  stagedAppRoot = $payloadAppRoot
+  stagedLauncherPath = $null
+  stagedRuntimeRoot = $null
+  installerPath = $outputExe
+  installRoot = $contract.InstallRoot
+  launcherPath = $contract.LauncherPath
+  runtimeRoot = $contract.RuntimeRoot
+  shortcutPath = $contract.ShortcutPath
+  expectedInstallRoot = $contract.InstallRoot
+  expectedLauncherPath = $contract.LauncherPath
+  expectedRuntimeRoot = $contract.RuntimeRoot
+  expectedShortcutPath = $contract.ShortcutPath
+  generatedIssPath = $issOutputPath
+  compilerLogPath = $compilerLogPath
+  generatedAt = (Get-Date).ToString("o")
+}
 
 try {
   if (-not $innoCompiler) {
     throw "Could not find Inno Setup compiler (ISCC.exe)."
   }
 
+  Remove-Item -Path $outputExe -Force -ErrorAction SilentlyContinue
+  Remove-Item -Path $issOutputPath -Force -ErrorAction SilentlyContinue
+  Remove-Item -Path $compilerLogPath -Force -ErrorAction SilentlyContinue
+
   New-Item -ItemType Directory -Force -Path $payloadRoot | Out-Null
   if ($payloadSource.SourceLayer -eq "packaged_archive") {
-    $archiveExtractRoot = Join-Path $tempRoot "archive-expanded"
+    $archiveExtractRoot = Join-Path $tempRoot "x"
     New-Item -ItemType Directory -Force -Path $archiveExtractRoot | Out-Null
     & tar.exe --zstd -xf $payloadSource.Path -C $archiveExtractRoot
     if ($LASTEXITCODE -ne 0) {
@@ -60,8 +89,38 @@ try {
     }
   }
 
-  $contract = Get-ElizaHomeWindowsInstallContract -BuildEnv $BuildEnv
-  $appDirectoryName = Split-Path -Leaf $contract.AppRoot
+  $inspection = Get-ElizaHomeWindowsPayloadInspection -AppRoot $payloadAppRoot
+  $manifest.stagedAppRoot = $inspection.appRoot
+  $manifest.stagedLauncherPath = $inspection.launcherPath
+  $manifest.stagedRuntimeRoot = $inspection.runtimeRoot
+  $manifest.payloadInspection = [ordered]@{
+    launcherExists = $inspection.launcherExists
+    runtimeExists = $inspection.runtimeExists
+    runtimeRootCandidates = $inspection.runtimeRootCandidates
+    iconPath = $inspection.iconPath
+    iconCandidates = $inspection.iconCandidates
+  }
+  $manifest.pathDiagnostics = [ordered]@{
+    payloadSource = Get-ElizaHomePathDiagnostic $payloadSource.Path
+    stagingRoot = Get-ElizaHomePathDiagnostic $tempRoot
+    stagedAppRoot = Get-ElizaHomePathDiagnostic $inspection.appRoot
+    stagedLauncherPath = Get-ElizaHomePathDiagnostic $inspection.launcherPath
+    stagedRuntimeRoot = Get-ElizaHomePathDiagnostic $inspection.runtimeRoot
+    outputExe = Get-ElizaHomePathDiagnostic $outputExe
+    installRoot = Get-ElizaHomePathDiagnostic $contract.InstallRoot
+    shortcutPath = Get-ElizaHomePathDiagnostic $contract.ShortcutPath
+  }
+
+  $validationFailures = [System.Collections.Generic.List[string]]::new()
+  if (-not $inspection.launcherExists) {
+    $validationFailures.Add("staged-launcher-missing: $($inspection.launcherPath)")
+  }
+  if (-not $inspection.runtimeExists) {
+    $candidateSummary = ($inspection.runtimeRootCandidates | ForEach-Object { $_ }) -join ", "
+    $validationFailures.Add("staged-runtime-missing: $candidateSummary")
+  }
+
+  $iconPath = $inspection.iconPath
   $defaultDirName = $contract.AppRoot.Replace('\', '\\')
   $groupName = (Split-Path -Parent $contract.ShortcutPath).Replace("$($env:APPDATA)\Microsoft\Windows\Start Menu\Programs\", "")
   $groupName = $groupName -replace '\\', '\'
@@ -69,12 +128,22 @@ try {
   $launcherRelative = "bin\launcher.exe"
   $workingDirRelative = "bin"
   $outputDirEscaped = $resolvedArtifactsDir.Replace('\', '\\')
-  $payloadSourceEscaped = $payloadAppRoot.Replace('\', '\\')
+  $payloadSourceEscaped = $inspection.appRoot.Replace('\', '\\')
   $iconDirective = if (Test-Path $iconPath) {
     "SetupIconFile=$($iconPath.Replace('\', '\\'))"
   } else {
     ""
   }
+
+  if ($validationFailures.Count -gt 0) {
+    $manifest.validationStatus = "failed"
+    $manifest.validationErrors = @($validationFailures)
+    $manifest | ConvertTo-Json -Depth 8 | Set-Content -Path $manifestPath -Encoding utf8
+    throw ($validationFailures -join "; ")
+  }
+
+  $manifest.validationStatus = "passed"
+  $manifest.validationErrors = @()
 
   $issContents = @"
 [Setup]
@@ -104,34 +173,35 @@ Source: "$payloadSourceEscaped\\*"; DestDir: "{app}"; Flags: ignoreversion recur
 Name: "{userprograms}\\$groupName\\$shortcutName"; Filename: "{app}\\$launcherRelative"; WorkingDir: "{app}\\$workingDirRelative"
 "@
   Set-Content -Path $issPath -Value $issContents -Encoding Ascii
+  Set-Content -Path $issOutputPath -Value $issContents -Encoding Ascii
+  $manifest | ConvertTo-Json -Depth 8 | Set-Content -Path $manifestPath -Encoding utf8
 
-  & $innoCompiler "/Qp" $issPath | Out-Null
+  $compilerOutput = (& $innoCompiler "/Qp" $issPath 2>&1) | Out-String
+  Set-Content -Path $compilerLogPath -Value $compilerOutput -Encoding utf8
+  if ($LASTEXITCODE -ne 0) {
+    $manifest.validationStatus = "compiler_failed"
+    $manifest.compilerFailure = "iss-source-path-invalid"
+    $manifest.compilerExitCode = $LASTEXITCODE
+    $manifest | ConvertTo-Json -Depth 8 | Set-Content -Path $manifestPath -Encoding utf8
+    throw "Inno Setup compiler failed with exit code $LASTEXITCODE. See $compilerLogPath"
+  }
   if (-not (Test-Path $outputExe)) {
+    $manifest.validationStatus = "compiler_failed"
+    $manifest.compilerFailure = "installer-output-missing"
+    $manifest | ConvertTo-Json -Depth 8 | Set-Content -Path $manifestPath -Encoding utf8
     throw "Wrapper installer was not generated at $outputExe"
   }
 
-  [ordered]@{
-    appName = $AppName
-    version = $Version
-    channel = $contract.Channel
-    installerType = "inno-setup"
-    payloadSourceLayer = $payloadSource.SourceLayer
-    payloadSourcePath = $payloadSource.Path
-    installerPath = $outputExe
-    installRoot = $contract.InstallRoot
-    launcherPath = $contract.LauncherPath
-    runtimeRoot = $contract.RuntimeRoot
-    shortcutPath = $contract.ShortcutPath
-    expectedInstallRoot = $contract.InstallRoot
-    expectedLauncherPath = $contract.LauncherPath
-    expectedRuntimeRoot = $contract.RuntimeRoot
-    expectedShortcutPath = $contract.ShortcutPath
-    generatedAt = (Get-Date).ToString("o")
-  } | ConvertTo-Json -Depth 8 | Set-Content -Path $manifestPath -Encoding utf8
+  $manifest.validationStatus = "built"
+  $manifest.generatedInstaller = $true
+  $manifest | ConvertTo-Json -Depth 8 | Set-Content -Path $manifestPath -Encoding utf8
 
   Write-Host "Built Windows wrapper installer: $outputExe"
   Write-Host "Windows payload source ($($payloadSource.SourceLayer)): $($payloadSource.Path)"
   Write-Host "Expected install root: $($contract.InstallRoot)"
+  Write-Host "Wrapper manifest: $manifestPath"
+  Write-Host "Wrapper ISS: $issOutputPath"
+  Write-Host "Wrapper compiler log: $compilerLogPath"
 } finally {
   if (Test-Path $tempRoot) {
     Remove-Item -Path $tempRoot -Recurse -Force -ErrorAction SilentlyContinue

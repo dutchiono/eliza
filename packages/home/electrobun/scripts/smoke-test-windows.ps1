@@ -162,6 +162,7 @@ try {
 }
 
 $contract = Get-ElizaHomeWindowsInstallContract -BuildEnv $BuildEnv
+$contractManifestPath = Join-Path $resolvedArtifactsDir "windows-installer-contract.json"
 $startupLog = Join-Path $env:APPDATA "Eliza Home\\eliza-home-startup.log"
 $smokeTempRoot = if ([string]::IsNullOrWhiteSpace($env:MILADY_TEST_WINDOWS_SMOKE_TEMP_ROOT)) {
   if ([string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) { $env:TEMP } else { $env:RUNNER_TEMP }
@@ -190,19 +191,69 @@ Write-PathDiagnostics -Label "launcher_path" -PathValue $contract.LauncherPath
 Write-PathDiagnostics -Label "runtime_root" -PathValue $contract.RuntimeRoot
 Write-PathDiagnostics -Label "shortcut_path" -PathValue $contract.ShortcutPath
 Write-PathDiagnostics -Label "startup_log" -PathValue $startupLog
+Write-PathDiagnostics -Label "contract_manifest" -PathValue $contractManifestPath
+
+$contractManifest = $null
+if (Test-Path $contractManifestPath) {
+  $contractManifest = Get-Content $contractManifestPath | ConvertFrom-Json
+  Write-SmokeEvent "wrapper.manifest" @{
+    validationStatus = $contractManifest.validationStatus
+    sourceLayer = $contractManifest.payloadSourceLayer
+    stagedAppRoot = $contractManifest.stagedAppRoot
+    stagedLauncherPath = $contractManifest.stagedLauncherPath
+    stagedRuntimeRoot = $contractManifest.stagedRuntimeRoot
+    compilerLogPath = $contractManifest.compilerLogPath
+  }
+}
 
 Stop-ElizaHomeProcesses
 Remove-ElizaHomeInstalledContract -Contract $contract
 $env:ELECTROBUN_CONSOLE = "1"
 
+if (-not $contractManifest) {
+  Write-SmokeEvent "contract.failure" @{
+    reason = "payload-shape-invalid"
+    detail = "windows-installer-contract.json missing"
+  }
+  throw "Windows installer contract manifest is missing: $contractManifestPath"
+}
+
+if ($contractManifest.validationStatus -notin @("passed", "built")) {
+  Write-SmokeEvent "contract.failure" @{
+    reason = "iss-source-path-invalid"
+    detail = $contractManifest.validationStatus
+  }
+  throw "Windows installer contract manifest is not ready for smoke: $($contractManifest.validationStatus)"
+}
+
+if (-not $contractManifest.stagedLauncherPath) {
+  Write-SmokeEvent "contract.failure" @{
+    reason = "staged-launcher-missing"
+  }
+  throw "Windows installer contract manifest is missing the staged launcher path."
+}
+
+if (-not $contractManifest.stagedRuntimeRoot) {
+  Write-SmokeEvent "contract.failure" @{
+    reason = "staged-runtime-missing"
+  }
+  throw "Windows installer contract manifest is missing the staged runtime root."
+}
+
 $installer = Find-InstallerExecutable -ResolvedArtifactsDir $resolvedArtifactsDir -TemporaryRoot $tempExtractDir
 if (-not $installer) {
+  Write-SmokeEvent "contract.failure" @{
+    reason = "installer-output-missing"
+  }
   throw "No Windows installer executable found in $resolvedArtifactsDir"
 }
 Write-PathDiagnostics -Label "installer_exe" -PathValue $installer.FullName
 
 Write-SmokeEvent "preflight.inventory" @{
   hasInstaller = $true
+  installerManifestExists = $true
+  stagedLauncherPath = $contractManifest.stagedLauncherPath
+  stagedRuntimeRoot = $contractManifest.stagedRuntimeRoot
   installRootExistsBeforeRun = [bool](Test-Path $contract.InstallRoot)
   launcherExistsBeforeRun = [bool](Test-Path $contract.LauncherPath)
   shortcutExistsBeforeRun = [bool](Test-Path $contract.ShortcutPath)
