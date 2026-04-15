@@ -200,6 +200,7 @@ export function useGoogleLifeOpsConnector(
   const [loading, setLoading] = useState(true);
   const [actionPending, setActionPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingAuthUrl, setPendingAuthUrl] = useState<string | null>(null);
   const runtimeReady = isLifeOpsRuntimeReady({
     startupPhase,
     agentState: agentStatus?.state ?? null,
@@ -234,6 +235,9 @@ export function useGoogleLifeOpsConnector(
         setSelectedMode(nextSelectedMode);
         setStatus(nextStatus);
         setError(null);
+        if (nextStatus.connected) {
+          setPendingAuthUrl(null);
+        }
       } catch (cause) {
         if (isTransientLifeOpsAvailabilityError(cause)) {
           setError(null);
@@ -415,6 +419,7 @@ export function useGoogleLifeOpsConnector(
 
   const selectMode = useCallback(
     async (mode: LifeOpsConnectorMode) => {
+      setPendingAuthUrl(null);
       try {
         setActionPending(true);
         const nextStatus = (status?.availableModes ?? []).includes(mode)
@@ -444,6 +449,7 @@ export function useGoogleLifeOpsConnector(
   const connect = useCallback(async () => {
     try {
       setActionPending(true);
+      setPendingAuthUrl(null);
       const requestedCapabilities = [...LIFEOPS_GOOGLE_CAPABILITIES];
       const connectMode = resolveConnectMode(
         status ?? null,
@@ -459,8 +465,10 @@ export function useGoogleLifeOpsConnector(
         mode: connectMode,
       });
       await openExternalUrl(result.authUrl);
+      setPendingAuthUrl(result.authUrl);
       setError(null);
     } catch (cause) {
+      setPendingAuthUrl(null);
       setError(
         formatConnectorError(cause, "Google connector setup failed to start."),
       );
@@ -473,6 +481,7 @@ export function useGoogleLifeOpsConnector(
     if (!status) {
       return;
     }
+    setPendingAuthUrl(null);
     try {
       setActionPending(true);
       await client.disconnectGoogleLifeOpsConnector({
@@ -507,6 +516,7 @@ export function useGoogleLifeOpsConnector(
     error,
     loading,
     modeOptions,
+    pendingAuthUrl,
     refresh,
     selectMode,
     selectedMode,
