@@ -19,7 +19,7 @@
 	branch = alpha
 [submodule "plugins/plugin-discord"]
 	path = plugins/plugin-discord
-	url = https://github.com/elizaos-plugins/plugin-discord.git
+	url = https://github.com/dutchiono/plugin-discord.git
 	branch = alpha
 [submodule "plugins/plugin-edge-tts"]
 	path = plugins/plugin-edge-tts
@@ -94,7 +94,7 @@
 	branch = alpha
 [submodule "plugins/plugin-telegram"]
 	path = plugins/plugin-telegram
-	url = https://github.com/elizaos-plugins/plugin-telegram.git
+	url = https://github.com/dutchiono/plugin-telegram.git
 	branch = alpha
 [submodule "plugins/plugin-whatsapp"]
 	path = plugins/plugin-whatsapp
@@ -121,5 +121,5 @@
 	url = https://github.com/milady-ai/plugin-wechat.git
 [submodule "plugins/plugin-agent-orchestrator"]
 	path = plugins/plugin-agent-orchestrator
-	url = https://github.com/elizaos-plugins/plugin-agent-orchestrator.git
+	url = https://github.com/dutchiono/plugin-agent-orchestrator.git
 	branch = alpha
