@@ -8,10 +8,12 @@ import {
   Button,
 } from "@elizaos/app-core";
 import {
+  Copy,
+  ExternalLink,
   Plug2,
   RefreshCw,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useGoogleLifeOpsConnector } from "@elizaos/app-core";
 import { useApp } from "@elizaos/app-core";
 import {
@@ -172,6 +174,44 @@ function connectorSetupDetails(
   };
 }
 
+function PendingAuthBanner({
+  url,
+  onDismiss,
+}: {
+  url: string;
+  onDismiss: () => void;
+}) {
+  const handleCopy = useCallback(() => {
+    void navigator.clipboard.writeText(url).catch(() => {});
+  }, [url]);
+
+  const handleOpen = useCallback(() => {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }, [url]);
+
+  return (
+    <div className="rounded-lg border border-border bg-bg/60 px-3 py-2.5 text-xs space-y-1.5">
+      <div className="font-semibold text-txt">
+        Complete authorization in your browser
+      </div>
+      <div className="text-muted break-all font-mono">{url}</div>
+      <div className="flex flex-wrap items-center gap-2 pt-0.5">
+        <Button size="sm" variant="outline" onClick={handleCopy}>
+          <Copy className="mr-1.5 h-3 w-3" />
+          Copy URL
+        </Button>
+        <Button size="sm" variant="outline" onClick={handleOpen}>
+          <ExternalLink className="mr-1.5 h-3 w-3" />
+          Open
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onDismiss}>
+          Dismiss
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function GoogleConnectorSideCard({
   apiBaseUrl,
   connector,
@@ -189,10 +229,17 @@ function GoogleConnectorSideCard({
     error,
     loading,
     modeOptions,
+    pendingAuthUrl,
     refresh,
     selectMode,
     status,
   } = connector;
+
+  const [dismissedAuthUrl, setDismissedAuthUrl] = useState<string | null>(null);
+  const visibleAuthUrl =
+    pendingAuthUrl && pendingAuthUrl !== dismissedAuthUrl
+      ? pendingAuthUrl
+      : null;
   const identity = readIdentity(status?.identity ?? null);
   const capabilityBadges = status?.grantedCapabilities ?? [];
   const currentStatusLabel = statusLabel(
@@ -299,6 +346,12 @@ function GoogleConnectorSideCard({
         </div>
       ) : null}
 
+      {visibleAuthUrl ? (
+        <PendingAuthBanner
+          url={visibleAuthUrl}
+          onDismiss={() => setDismissedAuthUrl(visibleAuthUrl)}
+        />
+      ) : null}
       {error ? <div className="text-xs text-danger">{error}</div> : null}
     </div>
   );
