@@ -133,6 +133,421 @@ const ALLOWED_CLASSIFIER_ACTIONS = new Set([
 	"IGNORE",
 	"STOP",
 ]);
+const CHAT_ROUTING_TEXT_MODEL_TYPES = new Set<string>([
+	ModelType.TEXT_NANO,
+	ModelType.TEXT_SMALL,
+	ModelType.TEXT_MEDIUM,
+	ModelType.TEXT_LARGE,
+	ModelType.TEXT_MEGA,
+	ModelType.RESPONSE_HANDLER,
+	ModelType.ACTION_PLANNER,
+	ModelType.TEXT_COMPLETION,
+]);
+type ChatRoutingErrorClass =
+	| "billing_error"
+	| "account_mismatch"
+	| "provider_failure"
+	| "timeout"
+	| "unknown";
+type ChatRouteSource = "policy" | "manual";
+type ChatRoutingTrigger = "provider_error" | "billing_error" | "long_prompt";
+type ChatRoutingReason =
+	| "primary"
+	| "fallback"
+	| "long_prompt"
+	| "provider_cooldown"
+	| "provider_error"
+	| "billing_error";
+type ChatProviderHealth = {
+	degradedUntilMs: number;
+	lastErrorAt?: number;
+	lastErrorClass?: ChatRoutingErrorClass;
+};
+type ChatRoutingDiagnosticsState = {
+	primary: string;
+	fallback: string;
+	lastSelectedProvider: string | null;
+	lastEffectiveProvider: string | null;
+	lastRouteSource: ChatRouteSource;
+	lastFallbackReason: ChatRoutingReason | null;
+	lastErrorClass: ChatRoutingErrorClass | null;
+	lastErrorMessage: string | null;
+	lastErrorHttpStatus?: number | null;
+	lastErrorRawBody?: string | null;
+	lastUpdatedAt: number;
+	providers: Record<string, ChatProviderHealth>;
+};
+type ChatRoutingConfig = {
+	primary: string;
+	fallback: string;
+	escalateOn: Set<ChatRoutingTrigger>;
+	longPromptThresholdTokens: number;
+	providerCooldownMs: number;
+};
+type RuntimeWithChatRoutingDiagnostics = IAgentRuntime & {
+	__chatRoutingDiagnostics?: ChatRoutingDiagnosticsState;
+};
+type RuntimeWithMutableUseModel = RuntimeWithChatRoutingDiagnostics & {
+	useModel: IAgentRuntime["useModel"];
+	models?: Map<string, Array<{ provider?: string }>>;
+};
+
+const DEFAULT_CHAT_ROUTING_CONFIG: ChatRoutingConfig = {
+	primary: "elizacloud",
+	fallback: "elizacloud",
+	escalateOn: new Set<ChatRoutingTrigger>([
+		"provider_error",
+		"billing_error",
+		"long_prompt",
+	]),
+	longPromptThresholdTokens: 7000,
+	providerCooldownMs: 120_000,
+};
+
+function normalizeProviderId(provider: string | undefined | null): string {
+	const value = String(provider ?? "")
+		.trim()
+		.toLowerCase();
+	if (!value) {
+		return "";
+	}
+	// Canonical alias: the plugin registers as "elizaOSCloud" but routing uses "elizacloud".
+	// Normalize all known spellings → "elizacloud" so string comparisons work.
+	if (value === "eliza-cloud" || value === "eliza_cloud" || value === "elizaoscloud") {
+		return "elizacloud";
+	}
+	return value;
+}
+
+/**
+ * Given a routing provider alias (e.g. "elizacloud"), return the actual provider
+ * string stored in runtime.models (e.g. "elizaOSCloud").  Falls back to undefined
+ * when no handler is registered so the runtime can pick its own default.
+ *
+ * Why: registerModel() stores the plugin's `.name` as the provider key. The routing
+ * config uses short aliases. Without this mapping, useModel() does an exact-string
+ * comparison and finds nothing.
+ */
+function resolveActualProviderName(
+	runtime: RuntimeWithMutableUseModel,
+	routingId: string | undefined,
+): string | undefined {
+	if (!routingId || !runtime.models) {
+		return routingId || undefined;
+	}
+	const normalizedRoutingId = normalizeProviderId(routingId);
+	if (!normalizedRoutingId) {
+		return undefined;
+	}
+	for (const handlers of runtime.models.values()) {
+		if (!Array.isArray(handlers)) {
+			continue;
+		}
+		for (const entry of handlers) {
+			if (
+				typeof entry?.provider === "string" &&
+				normalizeProviderId(entry.provider) === normalizedRoutingId
+			) {
+				return entry.provider; // actual plugin name, e.g. "elizaOSCloud"
+			}
+		}
+	}
+	// No registered handler matched — return undefined so the runtime falls
+	// back to its highest-priority handler rather than throwing on a mismatch.
+	return undefined;
+}
+
+function parsePositiveIntOrDefault(value: unknown, defaultValue: number): number {
+	const parsed =
+		typeof value === "number"
+			? value
+			: Number.parseInt(String(value ?? "").trim(), 10);
+	return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue;
+}
+
+function parseEscalateOn(
+	value: unknown,
+	defaultValue: Set<ChatRoutingTrigger>,
+): Set<ChatRoutingTrigger> {
+	if (Array.isArray(value)) {
+		return new Set(
+			value
+				.map((entry) => String(entry).trim().toLowerCase())
+				.filter((entry): entry is ChatRoutingTrigger =>
+					(["provider_error", "billing_error", "long_prompt"] as string[]).includes(
+						entry,
+					),
+				),
+		);
+	}
+
+	const text = String(value ?? "").trim();
+	if (!text) {
+		return new Set(defaultValue);
+	}
+
+	return new Set(
+		text
+			.split(",")
+			.map((entry) => entry.trim().toLowerCase())
+			.filter((entry): entry is ChatRoutingTrigger =>
+				(["provider_error", "billing_error", "long_prompt"] as string[]).includes(
+					entry,
+				),
+			),
+	);
+}
+
+function resolveChatRoutingConfig(runtime: IAgentRuntime): ChatRoutingConfig {
+	const config: ChatRoutingConfig = {
+		...DEFAULT_CHAT_ROUTING_CONFIG,
+		escalateOn: new Set(DEFAULT_CHAT_ROUTING_CONFIG.escalateOn),
+	};
+
+	const rawJson = runtime.getSetting("CHAT_ROUTING_JSON");
+	if (rawJson) {
+		try {
+			const parsed = JSON.parse(rawJson) as Record<string, unknown>;
+			if (typeof parsed.primary === "string" && parsed.primary.trim()) {
+				config.primary = normalizeProviderId(parsed.primary.trim());
+			}
+			if (typeof parsed.fallback === "string" && parsed.fallback.trim()) {
+				config.fallback = normalizeProviderId(parsed.fallback.trim());
+			}
+			if (parsed.escalateOn !== undefined) {
+				const parsedEscalate = parseEscalateOn(parsed.escalateOn, config.escalateOn);
+				if (parsedEscalate.size > 0) {
+					config.escalateOn = parsedEscalate;
+				}
+			}
+			if (parsed.longPromptThresholdTokens !== undefined) {
+				config.longPromptThresholdTokens = parsePositiveIntOrDefault(
+					parsed.longPromptThresholdTokens,
+					config.longPromptThresholdTokens,
+				);
+			}
+			if (parsed.providerCooldownMs !== undefined) {
+				config.providerCooldownMs = parsePositiveIntOrDefault(
+					parsed.providerCooldownMs,
+					config.providerCooldownMs,
+				);
+			}
+		} catch (error) {
+			runtime.logger.warn(
+				{
+					src: "service:message",
+					error: error instanceof Error ? error.message : String(error),
+				},
+				"Invalid CHAT_ROUTING_JSON; using defaults",
+			);
+		}
+	}
+
+	const primary = runtime.getSetting("CHAT_ROUTING_PRIMARY");
+	const fallback = runtime.getSetting("CHAT_ROUTING_FALLBACK");
+	const escalateOn = runtime.getSetting("CHAT_ROUTING_ESCALATE_ON");
+	const longPromptThresholdTokens = runtime.getSetting(
+		"CHAT_ROUTING_LONG_PROMPT_THRESHOLD_TOKENS",
+	);
+	const providerCooldownMs = runtime.getSetting(
+		"CHAT_ROUTING_PROVIDER_COOLDOWN_MS",
+	);
+
+	if (primary?.trim()) {
+		config.primary = normalizeProviderId(primary.trim());
+	}
+	if (fallback?.trim()) {
+		config.fallback = normalizeProviderId(fallback.trim());
+	}
+	if (escalateOn?.trim()) {
+		const parsedEscalate = parseEscalateOn(escalateOn, config.escalateOn);
+		if (parsedEscalate.size > 0) {
+			config.escalateOn = parsedEscalate;
+		}
+	}
+	if (longPromptThresholdTokens?.trim()) {
+		config.longPromptThresholdTokens = parsePositiveIntOrDefault(
+			longPromptThresholdTokens,
+			config.longPromptThresholdTokens,
+		);
+	}
+	if (providerCooldownMs?.trim()) {
+		config.providerCooldownMs = parsePositiveIntOrDefault(
+			providerCooldownMs,
+			config.providerCooldownMs,
+		);
+	}
+
+	return config;
+}
+
+function estimatePromptTokens(params: unknown): number {
+	if (params === null || params === undefined) {
+		return 0;
+	}
+	if (typeof params === "string") {
+		return Math.ceil(params.length / 4);
+	}
+	if (typeof params !== "object") {
+		return 0;
+	}
+
+	let totalChars = 0;
+	const record = params as Record<string, unknown>;
+
+	const include = (value: unknown) => {
+		if (typeof value === "string") {
+			totalChars += value.length;
+		}
+	};
+
+	include(record.prompt);
+	include(record.input);
+
+	if (Array.isArray(record.messages)) {
+		for (const message of record.messages) {
+			if (typeof message === "string") {
+				totalChars += message.length;
+				continue;
+			}
+			if (
+				typeof message === "object" &&
+				message !== null &&
+				"content" in message
+			) {
+				const content = (message as { content?: unknown }).content;
+				if (typeof content === "string") {
+					totalChars += content.length;
+				} else if (Array.isArray(content)) {
+					for (const part of content) {
+						if (
+							typeof part === "object" &&
+							part !== null &&
+							"text" in part &&
+							typeof (part as { text?: unknown }).text === "string"
+						) {
+							totalChars += ((part as { text: string }).text ?? "").length;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return Math.ceil(totalChars / 4);
+}
+
+function normalizeErrorText(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
+function classifyRoutingError(error: unknown): ChatRoutingErrorClass {
+	const message = normalizeErrorText(error).toLowerCase();
+	if (
+		message.includes("insufficient funds") ||
+		message.includes("quota") ||
+		message.includes("billing") ||
+		message.includes("payment")
+	) {
+		return "billing_error";
+	}
+	if (
+		message.includes("unauthorized") ||
+		message.includes("invalid api key") ||
+		message.includes("account mismatch") ||
+		message.includes("forbidden")
+	) {
+		return "account_mismatch";
+	}
+	if (message.includes("timeout") || message.includes("timed out")) {
+		return "timeout";
+	}
+	if (message.includes("provider") || message.includes("no handler found")) {
+		return "provider_failure";
+	}
+	return "unknown";
+}
+
+function getChatRoutingDiagnosticsState(
+	runtime: RuntimeWithChatRoutingDiagnostics,
+	config: ChatRoutingConfig,
+): ChatRoutingDiagnosticsState {
+	const existing = runtime.__chatRoutingDiagnostics;
+	if (existing) {
+		existing.primary = config.primary;
+		existing.fallback = config.fallback;
+		return existing;
+	}
+
+	const initial: ChatRoutingDiagnosticsState = {
+		primary: config.primary,
+		fallback: config.fallback,
+		lastSelectedProvider: null,
+		lastEffectiveProvider: null,
+		lastRouteSource: "policy",
+		lastFallbackReason: null,
+		lastErrorClass: null,
+		lastErrorMessage: null,
+		lastUpdatedAt: Date.now(),
+		providers: {},
+	};
+	runtime.__chatRoutingDiagnostics = initial;
+	return initial;
+}
+
+function isProviderHealthy(
+	diagnostics: ChatRoutingDiagnosticsState,
+	provider: string,
+	now: number,
+): boolean {
+	const health = diagnostics.providers[provider];
+	return !health || health.degradedUntilMs <= now;
+}
+
+function markProviderDegraded(
+	diagnostics: ChatRoutingDiagnosticsState,
+	provider: string,
+	errorClass: ChatRoutingErrorClass,
+	cooldownMs: number,
+	now: number,
+): void {
+	diagnostics.providers[provider] = {
+		degradedUntilMs: now + cooldownMs,
+		lastErrorAt: now,
+		lastErrorClass: errorClass,
+	};
+	diagnostics.lastErrorClass = errorClass;
+}
+
+function runtimeHasProviderRegistration(
+	runtime: RuntimeWithMutableUseModel,
+	provider: string,
+): boolean {
+	const normalizedProvider = normalizeProviderId(provider);
+	if (!normalizedProvider) {
+		return false;
+	}
+	if (!runtime.models) {
+		return true;
+	}
+	for (const handlers of runtime.models.values()) {
+		if (
+			Array.isArray(handlers) &&
+			handlers.some(
+				(entry) =>
+					normalizeProviderId(typeof entry?.provider === "string" ? entry.provider : "") ===
+					normalizedProvider,
+			)
+		) {
+			return true;
+		}
+	}
+	return false;
+}
+
+function shouldUseChatRouting(modelType: unknown): boolean {
+	return CHAT_ROUTING_TEXT_MODEL_TYPES.has(String(modelType));
+}
 
 function resolveDualPressureThreshold(runtime: IAgentRuntime): number {
 	const raw = runtime.getSetting("DUAL_PRESSURE_THRESHOLD");
@@ -1357,6 +1772,245 @@ export class DefaultMessageService implements IMessageService {
 						),
 					shouldRespondModel: resolvedShouldRespondModel,
 				};
+				const chatRoutingConfig = resolveChatRoutingConfig(runtime);
+				const runtimeWithRouting = runtime as RuntimeWithMutableUseModel;
+				const routingDiagnostics = getChatRoutingDiagnosticsState(
+					runtimeWithRouting,
+					chatRoutingConfig,
+				);
+				const originalUseModel = runtimeWithRouting.useModel.bind(runtime);
+				runtimeWithRouting.useModel = (async (
+					modelType,
+					params,
+					requestedProvider,
+				) => {
+					if (!shouldUseChatRouting(modelType)) {
+						return originalUseModel(modelType, params, requestedProvider);
+					}
+
+					const now = Date.now();
+					const modelLabel = String(modelType);
+					const estimatedTokens = estimatePromptTokens(params);
+					const routeSource: ChatRouteSource = requestedProvider
+						? "manual"
+						: "policy";
+
+					let selectedProvider: string | undefined = normalizeProviderId(
+						requestedProvider,
+					);
+					let reason: ChatRoutingReason = "primary";
+
+					if (!selectedProvider) {
+						const longPromptTriggered =
+							chatRoutingConfig.escalateOn.has("long_prompt") &&
+							estimatedTokens >= chatRoutingConfig.longPromptThresholdTokens;
+
+						if (
+							longPromptTriggered &&
+							runtimeHasProviderRegistration(
+								runtimeWithRouting,
+								chatRoutingConfig.fallback,
+							) &&
+							isProviderHealthy(
+								routingDiagnostics,
+								chatRoutingConfig.fallback,
+								now,
+							)
+						) {
+							selectedProvider = chatRoutingConfig.fallback;
+							reason = "long_prompt";
+						} else if (
+							runtimeHasProviderRegistration(
+								runtimeWithRouting,
+								chatRoutingConfig.primary,
+							) &&
+							isProviderHealthy(
+								routingDiagnostics,
+								chatRoutingConfig.primary,
+								now,
+							)
+						) {
+							selectedProvider = chatRoutingConfig.primary;
+							reason = "primary";
+						} else if (
+							runtimeHasProviderRegistration(
+								runtimeWithRouting,
+								chatRoutingConfig.fallback,
+							) &&
+							isProviderHealthy(
+								routingDiagnostics,
+								chatRoutingConfig.fallback,
+								now,
+							)
+						) {
+							selectedProvider = chatRoutingConfig.fallback;
+							reason = "provider_cooldown";
+						}
+					}
+
+					if (!selectedProvider) {
+						selectedProvider = normalizeProviderId(chatRoutingConfig.primary);
+						reason = "primary";
+					}
+
+					routingDiagnostics.lastSelectedProvider = selectedProvider ?? null;
+					routingDiagnostics.lastRouteSource = routeSource;
+					routingDiagnostics.lastFallbackReason = reason;
+					routingDiagnostics.lastUpdatedAt = Date.now();
+
+					const callPrimary = async (
+						providerToUse: string | undefined,
+					): Promise<unknown> => {
+						// Resolve the routing alias (e.g. "elizacloud") to the actual plugin
+						// provider name stored in runtime.models (e.g. "elizaOSCloud").
+						// runtime.registerModel() stores pluginToRegister.name as the provider,
+						// which may differ from the short routing alias.  Exact-string mismatch
+						// causes useModel() to find no handler and throw.
+						const actualProvider = resolveActualProviderName(
+							runtimeWithRouting,
+							providerToUse,
+						);
+						runtime.logger.info(
+							{
+								src: "service:message",
+								modelType: modelLabel,
+								selectedProvider: providerToUse ?? "runtime-default",
+								resolvedProvider: actualProvider ?? "runtime-default",
+								effectiveTransport: actualProvider ?? providerToUse ?? "runtime-default",
+								backend: actualProvider ?? providerToUse ?? "runtime-default",
+								routeSource,
+								estimatedTokens,
+								fallbackReason: reason,
+							},
+							"Chat routing model call",
+						);
+						return originalUseModel(modelType, params, actualProvider);
+					};
+
+					try {
+						const response = await callPrimary(selectedProvider);
+						routingDiagnostics.lastEffectiveProvider =
+							selectedProvider ?? "runtime-default";
+						routingDiagnostics.lastErrorClass = null;
+						routingDiagnostics.lastErrorMessage = null;
+						routingDiagnostics.lastUpdatedAt = Date.now();
+						return response;
+					} catch (error) {
+						const errorClass = classifyRoutingError(error);
+						const messageText = normalizeErrorText(error);
+						routingDiagnostics.lastErrorClass = errorClass;
+						routingDiagnostics.lastErrorMessage = messageText;
+						routingDiagnostics.lastErrorHttpStatus =
+							typeof (error as { status?: number }).status === "number"
+								? (error as { status: number }).status
+								: null;
+						routingDiagnostics.lastErrorRawBody =
+							typeof (error as { responseBody?: string }).responseBody === "string"
+								? (error as { responseBody: string }).responseBody.slice(0, 500)
+								: typeof (error as { body?: string }).body === "string"
+									? (error as { body: string }).body.slice(0, 500)
+									: null;
+						routingDiagnostics.lastUpdatedAt = Date.now();
+
+						if (selectedProvider) {
+							markProviderDegraded(
+								routingDiagnostics,
+								selectedProvider,
+								errorClass,
+								chatRoutingConfig.providerCooldownMs,
+								Date.now(),
+							);
+						}
+
+						runtime.logger.warn(
+							{
+								src: "service:message",
+								modelType: modelLabel,
+								selectedProvider: selectedProvider ?? "runtime-default",
+								effectiveTransport: selectedProvider ?? "runtime-default",
+								backend: selectedProvider ?? "runtime-default",
+								routeSource,
+								errorClass,
+								error: messageText,
+							},
+							"Chat routing primary attempt failed",
+						);
+
+						const shouldRetryOnFailure =
+							chatRoutingConfig.escalateOn.has("provider_error") ||
+							(errorClass === "billing_error" &&
+								chatRoutingConfig.escalateOn.has("billing_error"));
+
+						const fallbackProvider =
+							selectedProvider === chatRoutingConfig.primary
+								? chatRoutingConfig.fallback
+								: chatRoutingConfig.primary;
+						const canTryFallback =
+							shouldRetryOnFailure &&
+							fallbackProvider !== selectedProvider &&
+							runtimeHasProviderRegistration(runtimeWithRouting, fallbackProvider) &&
+							isProviderHealthy(
+								routingDiagnostics,
+								fallbackProvider,
+								Date.now(),
+							);
+
+						if (!canTryFallback) {
+							throw error;
+						}
+
+						routingDiagnostics.lastFallbackReason =
+							errorClass === "billing_error" ? "billing_error" : "provider_error";
+						routingDiagnostics.lastUpdatedAt = Date.now();
+
+						try {
+							const fallbackResponse = await callPrimary(fallbackProvider);
+							routingDiagnostics.lastEffectiveProvider = fallbackProvider;
+							routingDiagnostics.lastErrorClass = null;
+							routingDiagnostics.lastErrorMessage = null;
+							routingDiagnostics.lastUpdatedAt = Date.now();
+							return fallbackResponse;
+						} catch (fallbackError) {
+							const fallbackClass = classifyRoutingError(fallbackError);
+							if (fallbackProvider) {
+								markProviderDegraded(
+									routingDiagnostics,
+									fallbackProvider,
+									fallbackClass,
+									chatRoutingConfig.providerCooldownMs,
+									Date.now(),
+								);
+							}
+							routingDiagnostics.lastErrorClass = fallbackClass;
+							routingDiagnostics.lastErrorMessage =
+								normalizeErrorText(fallbackError);
+							routingDiagnostics.lastErrorHttpStatus =
+								typeof (fallbackError as { status?: number }).status === "number"
+									? (fallbackError as { status: number }).status
+									: null;
+							routingDiagnostics.lastErrorRawBody =
+								typeof (fallbackError as { responseBody?: string }).responseBody === "string"
+									? (fallbackError as { responseBody: string }).responseBody.slice(0, 500)
+									: typeof (fallbackError as { body?: string }).body === "string"
+										? (fallbackError as { body: string }).body.slice(0, 500)
+										: null;
+							routingDiagnostics.lastUpdatedAt = Date.now();
+							runtime.logger.error(
+								{
+									src: "service:message",
+									modelType: modelLabel,
+									selectedProvider: selectedProvider ?? "runtime-default",
+									fallbackProvider,
+									routeSource,
+									errorClass: fallbackClass,
+									error: normalizeErrorText(fallbackError),
+								},
+								"Chat routing fallback attempt failed",
+							);
+							throw fallbackError;
+						}
+					}
+				}) as IAgentRuntime["useModel"];
 
 				let visibleCallbackCount = 0;
 				let firstVisibleCallbackPreview = "";
@@ -1727,6 +2381,7 @@ export class DefaultMessageService implements IMessageService {
 
 					return result;
 				} finally {
+					runtimeWithRouting.useModel = originalUseModel;
 					clearTimeout(timeoutId);
 
 					// Ensure latestResponseIds is cleaned up even if processMessage

@@ -306,6 +306,19 @@ export type AgentDefaultsConfig = {
      */
     includeReasoning?: boolean;
   };
+  /** Chat provider routing policy (runtime text generation lane only). */
+  chatRouting?: {
+    /** Preferred provider for chat model calls (default: "ollama"). */
+    primary?: string;
+    /** Backup provider for chat model calls (default: "eliza-cloud"). */
+    fallback?: string;
+    /** Escalation triggers: provider_error, billing_error, long_prompt. */
+    escalateOn?: Array<"provider_error" | "billing_error" | "long_prompt">;
+    /** Prompt token threshold that can force fallback provider selection. */
+    longPromptThresholdTokens?: number;
+    /** Cooldown in ms after provider failure to avoid oscillation/flapping. */
+    providerCooldownMs?: number;
+  };
   /** Max concurrent agent runs across all conversations. Default: 1 (sequential). */
   maxConcurrent?: number;
   /** Sub-agent defaults (spawned via sessions_spawn). */

@@ -485,6 +485,7 @@ export function useChatSend(deps: UseChatSendDeps) {
       if (
         activeConv &&
         (!activeConv.title ||
+          activeConv.title === "default" ||
           activeConv.title === "New Chat" ||
           activeConv.title === "companion.newChat" ||
           activeConv.title === "conversations.newChatTitle")
@@ -841,6 +842,7 @@ export function useChatSend(deps: UseChatSendDeps) {
         if (
           activeConv &&
           (!activeConv.title ||
+            activeConv.title === "default" ||
             activeConv.title === "New Chat" ||
             activeConv.title === "companion.newChat" ||
             activeConv.title === "conversations.newChatTitle")

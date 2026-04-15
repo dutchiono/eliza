@@ -1,0 +1,141 @@
+diff --git a/src/services/pty-service.ts b/src/services/pty-service.ts
+index ea1fc8d..a24ec29 100644
+--- a/src/services/pty-service.ts
++++ b/src/services/pty-service.ts
+@@ -1444,6 +1444,23 @@ export class PTYService {
+     let adapter = this.adapterCache.get(agentType);
+     if (!adapter) {
+       adapter = createAdapter(agentType);
++      if (process.platform === "win32") {
++        const windowsPatched = adapter as BaseCodingAdapter & {
++          __parallaxWindowsCommandPatched?: boolean;
++          getCommand: () => string;
++        };
++        if (!windowsPatched.__parallaxWindowsCommandPatched) {
++          const originalGetCommand = windowsPatched.getCommand.bind(adapter);
++          windowsPatched.getCommand = () => {
++            const command = originalGetCommand();
++            if (command === "claude" || command === "codex") {
++              return `${command}.cmd`;
++            }
++            return command;
++          };
++          windowsPatched.__parallaxWindowsCommandPatched = true;
++        }
++      }
+       this.adapterCache.set(agentType, adapter);
+     }
+     return adapter;
+diff --git a/src/services/pty-spawn.ts b/src/services/pty-spawn.ts
+index aef29a6..a33720a 100644
+--- a/src/services/pty-spawn.ts
++++ b/src/services/pty-spawn.ts
+@@ -48,6 +48,42 @@ const ENV_ALLOWLIST = [
+   "ANTHROPIC_SMALL_FAST_MODEL",
+ ];
+ 
++function mergePathEntries(
++  currentPath: string | undefined,
++  extras: string[],
++): string | undefined {
++  const delimiter = process.platform === "win32" ? ";" : ":";
++  const existing = (currentPath ?? "")
++    .split(delimiter)
++    .map((entry) => entry.trim())
++    .filter(Boolean);
++  const merged: string[] = [];
++  const seen = new Set<string>();
++  const normalize = (value: string) =>
++    process.platform === "win32" ? value.toLowerCase() : value;
++  for (const entry of [...existing, ...extras]) {
++    const key = normalize(entry);
++    if (!key || seen.has(key)) continue;
++    seen.add(key);
++    merged.push(entry);
++  }
++  return merged.length > 0 ? merged.join(delimiter) : undefined;
++}
++
++function getWindowsPathFallbacks(): string[] {
++  if (process.platform !== "win32") return [];
++  const appData = process.env.APPDATA;
++  const userProfile = process.env.USERPROFILE;
++  const localAppData = process.env.LOCALAPPDATA;
++  const candidates = [
++    appData ? `${appData}\\npm` : undefined,
++    userProfile ? `${userProfile}\\AppData\\Roaming\\npm` : undefined,
++    localAppData ? `${localAppData}\\OpenAI\\Codex\\bin` : undefined,
++    userProfile ? `${userProfile}\\.bun\\bin` : undefined,
++  ];
++  return candidates.filter((entry): entry is string => !!entry && !!entry.trim());
++}
++
+ /**
+  * Build a sanitized base environment from process.env, keeping only
+  * safe system variables. Agent-specific credentials are injected
+@@ -65,6 +101,10 @@ export function buildSanitizedBaseEnv(): Record<string, string> {
+   if (!env.COLORTERM) {
+     env.COLORTERM = "truecolor";
+   }
++  const mergedPath = mergePathEntries(env.PATH, getWindowsPathFallbacks());
++  if (mergedPath) {
++    env.PATH = mergedPath;
++  }
+   return env;
+ }
+ 
+diff --git a/src/services/task-agent-auth.ts b/src/services/task-agent-auth.ts
+index d700f83..156869f 100644
+--- a/src/services/task-agent-auth.ts
++++ b/src/services/task-agent-auth.ts
+@@ -81,6 +81,13 @@ const DEFAULT_INITIAL_AUTH_WAIT_MS = 2_000;
+ const DEFAULT_COMMAND_TIMEOUT_MS = 5_000;
+ const DEFAULT_BROWSER_ASSIST_TIMEOUT_MS = 750;
+ 
++function resolveCliCommand(base: "claude" | "codex"): string {
++  if (process.platform === "win32") {
++    return `${base}.cmd`;
++  }
++  return base;
++}
++
+ const DEFAULT_BROWSER_CLICK_SELECTORS: Record<
+   SupportedTaskAgentAdapter,
+   string[]
+@@ -389,8 +396,9 @@ export async function probeTaskAgentAuth(
+   switch (agentType) {
+     case "claude": {
+       try {
++        const command = resolveCliCommand("claude");
+         const { stdout, stderr } = await deps.execFile(
+-          "claude",
++          command,
+           ["auth", "status"],
+           {
+             encoding: "utf8",
+@@ -447,8 +455,9 @@ export async function probeTaskAgentAuth(
+     }
+     case "codex": {
+       try {
++        const command = resolveCliCommand("codex");
+         const { stdout, stderr } = await deps.execFile(
+-          "codex",
++          command,
+           ["login", "status"],
+           {
+             encoding: "utf8",
+@@ -512,9 +521,12 @@ function getTaskAgentAuthCommand(
+ ): { command: string; args: string[] } | null {
+   switch (agentType) {
+     case "claude":
+-      return { command: "claude", args: ["auth", "login", "--claudeai"] };
++      return {
++        command: resolveCliCommand("claude"),
++        args: ["auth", "login", "--claudeai"],
++      };
+     case "codex":
+-      return { command: "codex", args: ["login"] };
++      return { command: resolveCliCommand("codex"), args: ["login"] };
+     default:
+       return null;
+   }

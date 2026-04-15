@@ -114,6 +114,20 @@ export const AUTH_PROVIDER_PLUGINS: Record<string, string> = {
   SHOPIFY_ACCESS_TOKEN: "@elizaos/plugin-shopify",
 };
 
+function shouldAutoEnableOllamaFromEnv(
+  pluginsConfig: NonNullable<ElizaConfig["plugins"]>,
+  env: NodeJS.ProcessEnv,
+): boolean {
+  // `OLLAMA_BASE_URL` is commonly set globally on Windows (user/system env).
+  // Treating it as unconditional auto-enable causes startup failures when the
+  // local Ollama plugin/binary is unavailable. Require explicit opt-in unless
+  // the plugin was already enabled by the user.
+  const explicitOptIn = env.ELIZA_AUTO_ENABLE_OLLAMA?.trim() === "1";
+  const explicitlyEnabled = pluginsConfig.entries.ollama?.enabled === true;
+  const alreadyAllowed = pluginsConfig.allow.includes("@elizaos/plugin-ollama");
+  return explicitOptIn || explicitlyEnabled || alreadyAllowed;
+}
+
 const FEATURE_PLUGINS: Record<string, string> = {
   browser: "@elizaos/plugin-browser",
   cua: "@elizaos/plugin-cua",
@@ -428,6 +442,14 @@ export function applyPluginAutoEnable(
     const envValue = env[envKey];
     if (!envValue || typeof envValue !== "string" || envValue.trim() === "")
       continue;
+
+    if (
+      envKey === "OLLAMA_BASE_URL" &&
+      !shouldAutoEnableOllamaFromEnv(pluginsConfig, env)
+    ) {
+      continue;
+    }
+
     const pluginId = pluginName.includes("/plugin-")
       ? pluginName.slice(pluginName.lastIndexOf("/plugin-") + "/plugin-".length)
       : pluginName;

@@ -795,6 +795,24 @@ export const AgentDefaultsSchema = z
       ])
       .optional(),
     heartbeat: HeartbeatSchema,
+    chatRouting: z
+      .object({
+        primary: z.string().optional(),
+        fallback: z.string().optional(),
+        escalateOn: z
+          .array(
+            z.union([
+              z.literal("provider_error"),
+              z.literal("billing_error"),
+              z.literal("long_prompt"),
+            ]),
+          )
+          .optional(),
+        longPromptThresholdTokens: z.number().int().positive().optional(),
+        providerCooldownMs: z.number().int().positive().optional(),
+      })
+      .strict()
+      .optional(),
     maxConcurrent: z.number().int().positive().optional(),
     subagents: z
       .object({

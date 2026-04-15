@@ -183,7 +183,6 @@ export async function handleSubscriptionRoutes(
       code?: string;
       waitForCallback?: boolean;
     }>(req, res);
-    if (!body) return true;
     try {
       const { saveCredentials, applySubscriptionCredentials } =
         await loadSubscriptionAuth();
@@ -194,9 +193,17 @@ export async function handleSubscriptionRoutes(
         return true;
       }
 
-      if (body.code) {
-        flow.submitCode(body.code);
-      } else if (!body.waitForCallback) {
+      const submittedCode = body?.code?.trim();
+      // Backward-compatible behavior:
+      // - old UIs submit { code: "" } when users cannot copy callback URLs
+      // - newer UIs may submit { waitForCallback: true } with no code
+      // Treat both as "wait for local callback" instead of hard-failing.
+      const shouldWaitForCallback =
+        submittedCode?.length === 0 || body?.waitForCallback !== false;
+
+      if (submittedCode) {
+        flow.submitCode(submittedCode);
+      } else if (!shouldWaitForCallback) {
         error(res, "Provide either code or set waitForCallback: true", 400);
         return true;
       }

@@ -11,6 +11,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { AppsPageView } from "./components/pages/AppsPageView";
@@ -277,6 +278,9 @@ export function App() {
     activeGameViewerUrl,
     gameOverlayEnabled,
     uiShellMode,
+    pendingRestart,
+    pendingRestartReasons,
+    setActionNotice,
     t,
   } = useApp();
   const { companionShell: CompanionShell } = useBootConfig();
@@ -349,6 +353,7 @@ export function App() {
   const [desktopShuttingDown, setDesktopShuttingDown] = useState(false);
   const [characterHeaderActions, setCharacterHeaderActions] =
     useState<ReactNode | null>(null);
+  const previousTabRef = useRef(tab);
 
   const isConnectors = tab === "connectors";
   const isCompanionTab = tab === "companion";
@@ -463,6 +468,23 @@ export function App() {
       setTasksEventsPanelOpen(false);
     }
   }, [isChat, isChatWorkspace]);
+
+  useEffect(() => {
+    const previousTab = previousTabRef.current;
+    const leavingConnectors = previousTab === "connectors" && tab !== "connectors";
+    if (
+      leavingConnectors &&
+      pendingRestart &&
+      pendingRestartReasons.includes("Discord token updated")
+    ) {
+      setActionNotice(
+        "Discord token change is pending. Restart the agent to apply it.",
+        "info",
+        4800,
+      );
+    }
+    previousTabRef.current = tab;
+  }, [tab, pendingRestart, pendingRestartReasons, setActionNotice]);
 
   useEffect(() => {
     if (isSettingsPage || settingsInitialSection === null) {

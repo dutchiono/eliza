@@ -997,14 +997,18 @@ export function mapTaskThreadsToCodingAgentSessions(
         ? ("error" as const)
         : thread.status === "done"
           ? ("completed" as const)
-          : thread.status === "interrupted"
+          : thread.status === "archived" || thread.status === "interrupted"
             ? ("stopped" as const)
             : thread.status === "validating"
               ? ("tool_running" as const)
               : thread.status === "blocked" ||
                   thread.status === "waiting_on_user"
                 ? ("blocked" as const)
-                : ("active" as const),
+                : // "open"/"active" with zero live sessions is a stale/restored
+                  // thread record, not an active PTY session.
+                  thread.activeSessionCount > 0
+                  ? ("active" as const)
+                  : ("stopped" as const),
     decisionCount: thread.decisionCount,
     autoResolvedCount: 0,
     lastActivity:

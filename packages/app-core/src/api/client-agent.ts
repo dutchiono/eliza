@@ -225,7 +225,14 @@ declare module "./client-base" {
       state: string;
       instructions: string;
     }>;
-    exchangeOpenAICode(code: string): Promise<{
+    exchangeOpenAICode(
+      codeOrOptions?:
+        | string
+        | {
+            code?: string;
+            waitForCallback?: boolean;
+          },
+    ): Promise<{
       success: boolean;
       expiresAt?: string;
       accountId?: string;
@@ -503,6 +510,7 @@ declare module "./client-base" {
     ): Promise<CodingAgentTaskThreadDetail | null>;
     archiveCodingAgentTaskThread(threadId: string): Promise<boolean>;
     reopenCodingAgentTaskThread(threadId: string): Promise<boolean>;
+    stopCodingAgentTaskThread(threadId: string, note?: string): Promise<boolean>;
     stopCodingAgent(sessionId: string): Promise<boolean>;
     listCodingAgentScratchWorkspaces(): Promise<CodingAgentScratchWorkspace[]>;
     keepCodingAgentScratchWorkspace(sessionId: string): Promise<boolean>;
@@ -795,6 +803,8 @@ ElizaClient.prototype.switchProvider = async function (
       ...(apiKey ? { apiKey } : {}),
       ...(primaryModel ? { primaryModel } : {}),
     }),
+  }, {
+    timeoutMs: SETTINGS_MUTATION_TIMEOUT_MS,
   })) as { success: boolean; provider: string; restarting: boolean };
   logSettingsClient("POST /api/provider/switch ← ok", {
     baseUrl: this.getBaseUrl(),
@@ -809,12 +819,16 @@ ElizaClient.prototype.startOpenAILogin = async function (this: ElizaClient) {
 
 ElizaClient.prototype.exchangeOpenAICode = async function (
   this: ElizaClient,
-  code,
+  codeOrOptions?,
 ) {
+  const payload =
+    typeof codeOrOptions === "string"
+      ? { code: codeOrOptions }
+      : (codeOrOptions ?? { waitForCallback: true });
   return this.fetch("/api/subscription/openai/exchange", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code }),
+    body: JSON.stringify(payload),
   });
 };
 
@@ -859,13 +873,21 @@ ElizaClient.prototype.resumeAgent = async function (this: ElizaClient) {
 };
 
 ElizaClient.prototype.restartAgent = async function (this: ElizaClient) {
-  const res = await this.fetch<{ status: AgentStatus }>(
-    "/api@elizaos/agent/restart",
-    {
+  try {
+    const res = await this.fetch<{ status: AgentStatus }>("/api/agent/restart", {
       method: "POST",
-    },
-  );
-  return res.status;
+    });
+    return res.status;
+  } catch {
+    // Back-compat for older runtimes that still expose the legacy restart path.
+    const legacy = await this.fetch<{ status: AgentStatus }>(
+      "/api@elizaos/agent/restart",
+      {
+        method: "POST",
+      },
+    );
+    return legacy.status;
+  }
 };
 
 ElizaClient.prototype.restartAndWait = async function (
@@ -880,7 +902,7 @@ ElizaClient.prototype.restartAndWait = async function (
   try {
     await this.restartAgent();
     console.info(
-      "[eliza][reset][client] restartAndWait: POST /api@elizaos/agent/restart accepted",
+      "[eliza][reset][client] restartAndWait: restart accepted",
     );
   } catch (e) {
     console.info(
@@ -1841,6 +1863,25 @@ ElizaClient.prototype.reopenCodingAgentTaskThread = async function (
     { method: "POST" },
   );
   return true;
+};
+
+ElizaClient.prototype.stopCodingAgentTaskThread = async function (
+  this: ElizaClient,
+  threadId,
+  note?,
+) {
+  try {
+    await this.fetch(
+      `/api/coding-agents/coordinator/threads/${encodeURIComponent(threadId)}/control`,
+      {
+        method: "POST",
+        body: JSON.stringify({ action: "stop", ...(note ? { note } : {}) }),
+      },
+    );
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 ElizaClient.prototype.stopCodingAgent = async function (

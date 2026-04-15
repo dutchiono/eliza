@@ -378,15 +378,29 @@ export function ConnectionProviderDetailScreen({
     if (openaiExchangeBusy) {
       return;
     }
-    const normalized = normalizeOpenAICallbackInput(openaiCallbackUrl);
-    if (normalized.ok === false) {
-      setOpenaiError(t(normalized.error));
-      return;
-    }
     setOpenaiError("");
     setOpenaiExchangeBusy(true);
     try {
-      const data = await client.exchangeOpenAICode(normalized.code);
+      const callbackValue = openaiCallbackUrl.trim();
+      let data:
+        | {
+            success: boolean;
+            expiresAt?: string;
+            accountId?: string;
+            error?: string;
+          }
+        | null = null;
+      if (callbackValue.length > 0) {
+        const normalized = normalizeOpenAICallbackInput(callbackValue);
+        if (normalized.ok === false) {
+          setOpenaiError(t(normalized.error));
+          return;
+        }
+        data = await client.exchangeOpenAICode(normalized.code);
+      } else {
+        data = await client.exchangeOpenAICode({ waitForCallback: true });
+      }
+      if (!data) return;
       if (data.success) {
         setOpenaiOAuthStarted(false);
         setOpenaiCallbackUrl("");
@@ -897,7 +911,7 @@ export function ConnectionProviderDetailScreen({
                   type="button"
                   className={onboardingPrimaryActionClass}
                   style={onboardingPrimaryActionTextShadowStyle}
-                  disabled={!openaiCallbackUrl.trim() || openaiExchangeBusy}
+                  disabled={openaiExchangeBusy}
                   onClick={(e) => {
                     spawnOnboardingRipple(e.currentTarget, {
                       x: e.clientX,

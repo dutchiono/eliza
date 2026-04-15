@@ -3315,6 +3315,13 @@ export async function startEliza(
             ),
           }
         : {}),
+      ...(config.agents?.defaults?.chatRouting
+        ? {
+            CHAT_ROUTING_JSON: JSON.stringify(
+              config.agents.defaults.chatRouting,
+            ),
+          }
+        : {}),
       // Forward skills config so plugin-agent-skills can apply allow/deny filtering
       ...(config.skills?.allowBundled
         ? { SKILLS_ALLOWLIST: config.skills.allowBundled.join(",") }

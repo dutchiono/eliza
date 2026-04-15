@@ -15,7 +15,11 @@ export function CodingAgentControlChip() {
 
   const stopAll = useCallback(() => {
     for (const s of ptySessions) {
-      void client.stopCodingAgent(s.sessionId);
+      if (s.agentType === "task-thread") {
+        void client.stopCodingAgentTaskThread(s.sessionId);
+      } else {
+        void client.stopCodingAgent(s.sessionId);
+      }
     }
   }, [ptySessions]);
 

@@ -35,6 +35,13 @@ const SUCCESS_HTML = `<!doctype html>
 </head>
 <body>
   <p>Authentication successful. Return to your terminal to continue.</p>
+  <script>
+    try {
+      setTimeout(function () {
+        window.close();
+      }, 300);
+    } catch (_) {}
+  </script>
 </body>
 </html>`;
 

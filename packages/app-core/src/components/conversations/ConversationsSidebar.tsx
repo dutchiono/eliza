@@ -732,30 +732,35 @@ export function ConversationsSidebar({
                               if (row.kind === "inbox") return;
                               void handleConfirmDelete(row.id);
                             }}
-                            onOpenActions={(event) => {
-                              if (row.kind === "inbox") {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                return;
-                              }
-                              openActionsMenu(event, {
-                                id: row.id,
-                                title: row.title,
-                              });
-                            }}
-                            onRequestDeleteConfirm={() => {
-                              if (row.kind === "inbox") return;
-                              setMenuConversation(null);
-                              setRenameTarget(null);
-                              setConfirmDeleteId(row.id);
-                            }}
-                            onRequestRename={() => {
-                              if (row.kind === "inbox") return;
-                              openRenameDialog({
-                                id: row.id,
-                                title: row.title,
-                              });
-                            }}
+                            onOpenActions={
+                              row.kind === "inbox"
+                                ? undefined
+                                : (event) => {
+                                    openActionsMenu(event, {
+                                      id: row.id,
+                                      title: row.title,
+                                    });
+                                  }
+                            }
+                            onRequestDeleteConfirm={
+                              row.kind === "inbox"
+                                ? undefined
+                                : () => {
+                                    setMenuConversation(null);
+                                    setRenameTarget(null);
+                                    setConfirmDeleteId(row.id);
+                                  }
+                            }
+                            onRequestRename={
+                              row.kind === "inbox"
+                                ? undefined
+                                : () => {
+                                    openRenameDialog({
+                                      id: row.id,
+                                      title: row.title,
+                                    });
+                                  }
+                            }
                             onSelect={() => handleRowSelect(row)}
                             variant={variant}
                           />

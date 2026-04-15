@@ -61,6 +61,32 @@ const libMacWindowEffectsDylib = path.join(
   "libMacWindowEffects.dylib",
 );
 
+type ChromiumFlags = Record<string, string | true>;
+
+function resolveWindowsChromiumFlags(): ChromiumFlags {
+  const profile = (
+    process.env.ELIZA_WIN_CEF_FLAG_PROFILE ??
+    process.env.ELIZA_WIN_CEF_FLAG_PROFILE ??
+    "safe"
+  )
+    .trim()
+    .toLowerCase();
+
+  // Prefer startup stability by default on Windows. The aggressive profile
+  // keeps the previous behavior for local debugging when needed.
+  if (profile === "aggressive") {
+    return {
+      "enable-unsafe-webgpu": true,
+      "enable-features": "Vulkan",
+      "in-process-gpu": true,
+      "disable-gpu-sandbox": true,
+      "no-sandbox": true,
+    };
+  }
+
+  return {};
+}
+
 export function createElectrobunConfig(): ElectrobunConfig {
   const appName =
     (process.env.ELIZA_APP_NAME ?? process.env.ELIZA_APP_NAME ?? "").trim() ||
@@ -178,13 +204,7 @@ export function createElectrobunConfig(): ElectrobunConfig {
         bundleWGPU: true,
         defaultRenderer: "cef",
         icon: "assets/appIcon.ico",
-        chromiumFlags: {
-          "enable-unsafe-webgpu": true,
-          "enable-features": "Vulkan",
-          "in-process-gpu": true,
-          "disable-gpu-sandbox": true,
-          "no-sandbox": true,
-        } as unknown as Record<string, string | true>,
+        chromiumFlags: resolveWindowsChromiumFlags() as unknown as ChromiumFlags,
       },
     },
     ...(releaseUrl

@@ -583,6 +583,13 @@ async function launch() {
   console.log("");
 
   if (!skipApi) {
+    const windowsLocalEmbeddingGuard =
+      process.platform === "win32"
+        ? {
+            ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1",
+            MILADY_DISABLE_LOCAL_EMBEDDINGS: "1",
+          }
+        : {};
     pushChild(
       "api",
       "bun",
@@ -603,6 +610,7 @@ async function launch() {
         ...(desktopDevLogPath
           ? { ELIZA_DESKTOP_DEV_LOG_PATH: desktopDevLogPath }
           : {}),
+        ...windowsLocalEmbeddingGuard,
       },
     );
     await waitForPort(Number(apiPort));

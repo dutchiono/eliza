@@ -1,0 +1,346 @@
+diff --git a/README.md b/README.md
+index 2cd7f0d..0072ebe 100644
+--- a/README.md
++++ b/README.md
+@@ -51,14 +51,15 @@ DISCORD_LISTEN_CHANNEL_IDS=123456789012345678
+ DISCORD_VOICE_CHANNEL_ID=123456789012345678
+ 
+ # Behavior Settings (Optional)
+-# If true, ignore messages from other bots (default: false)
+-DISCORD_SHOULD_IGNORE_BOT_MESSAGES=false
++# If true, ignore messages from other bots (default: true)
++DISCORD_SHOULD_IGNORE_BOT_MESSAGES=true
+ 
+-# If true, ignore direct messages (default: false)
+-DISCORD_SHOULD_IGNORE_DIRECT_MESSAGES=false
++# If true, ignore direct messages by default (default: true).
++# DMs can still be allowed explicitly via DISCORD_ALLOW_FROM / pairing allowlist.
++DISCORD_SHOULD_IGNORE_DIRECT_MESSAGES=true
+ 
+-# If true, only respond when explicitly @mentioned (default: false)
+-DISCORD_SHOULD_RESPOND_ONLY_TO_MENTIONS=false
++# If true, only respond when explicitly @mentioned (default: true)
++DISCORD_SHOULD_RESPOND_ONLY_TO_MENTIONS=true
+ 
+ # Testing (Optional)
+ DISCORD_TEST_CHANNEL_ID=123456789012345678
+@@ -70,9 +71,9 @@ Settings can also be configured in your character file under `settings.discord`:
+ {
+   "settings": {
+     "discord": {
+-      "shouldIgnoreBotMessages": false,
+-      "shouldIgnoreDirectMessages": false,
+-      "shouldRespondOnlyToMentions": false,
++      "shouldIgnoreBotMessages": true,
++      "shouldIgnoreDirectMessages": true,
++      "shouldRespondOnlyToMentions": true,
+       "allowedChannelIds": ["123456789012345678"]
+     }
+   }
+diff --git a/typescript/accounts.ts b/typescript/accounts.ts
+index 2940fe7..2c550a7 100644
+--- a/typescript/accounts.ts
++++ b/typescript/accounts.ts
+@@ -225,6 +225,30 @@ function filterDefined<T extends object>(obj: T): Partial<T> {
+ 	) as Partial<T>;
+ }
+ 
++function parseOptionalBooleanSetting(
++	runtime: IAgentRuntime,
++	key: string,
++): boolean | undefined {
++	const value = runtime.getSetting(key);
++	if (value === undefined || value === null) {
++		return undefined;
++	}
++	if (typeof value === "boolean") {
++		return value;
++	}
++	const normalized = String(value).trim().toLowerCase();
++	if (!normalized) {
++		return undefined;
++	}
++	if (normalized === "true" || normalized === "1") {
++		return true;
++	}
++	if (normalized === "false" || normalized === "0") {
++		return false;
++	}
++	return undefined;
++}
++
+ /**
+  * Merges base configuration with account-specific overrides
+  */
+@@ -243,18 +267,18 @@ function mergeDiscordAccountConfig(
+ 	) as string | undefined;
+ 
+ 	const envConfig: DiscordAccountConfig = {
+-		shouldIgnoreBotMessages:
+-			(
+-				runtime.getSetting("DISCORD_SHOULD_IGNORE_BOT_MESSAGES") as string
+-			)?.toLowerCase() === "true",
+-		shouldIgnoreDirectMessages:
+-			(
+-				runtime.getSetting("DISCORD_SHOULD_IGNORE_DIRECT_MESSAGES") as string
+-			)?.toLowerCase() === "true",
+-		shouldRespondOnlyToMentions:
+-			(
+-				runtime.getSetting("DISCORD_SHOULD_RESPOND_ONLY_TO_MENTIONS") as string
+-			)?.toLowerCase() === "true",
++		shouldIgnoreBotMessages: parseOptionalBooleanSetting(
++			runtime,
++			"DISCORD_SHOULD_IGNORE_BOT_MESSAGES",
++		),
++		shouldIgnoreDirectMessages: parseOptionalBooleanSetting(
++			runtime,
++			"DISCORD_SHOULD_IGNORE_DIRECT_MESSAGES",
++		),
++		shouldRespondOnlyToMentions: parseOptionalBooleanSetting(
++			runtime,
++			"DISCORD_SHOULD_RESPOND_ONLY_TO_MENTIONS",
++		),
+ 		channelIds: envChannelIds
+ 			? envChannelIds
+ 					.split(",")
+diff --git a/typescript/environment.ts b/typescript/environment.ts
+index 5b0c96c..c1bc74f 100644
+--- a/typescript/environment.ts
++++ b/typescript/environment.ts
+@@ -25,15 +25,15 @@ function getEnvArray(name: string, fallback: string[]): string[] {
+ export const DISCORD_DEFAULTS = {
+ 	SHOULD_IGNORE_BOT_MESSAGES: getEnvBoolean(
+ 		"DISCORD_SHOULD_IGNORE_BOT_MESSAGES",
+-		false,
++		true,
+ 	),
+ 	SHOULD_IGNORE_DIRECT_MESSAGES: getEnvBoolean(
+ 		"DISCORD_SHOULD_IGNORE_DIRECT_MESSAGES",
+-		false,
++		true,
+ 	),
+ 	SHOULD_RESPOND_ONLY_TO_MENTIONS: getEnvBoolean(
+ 		"DISCORD_SHOULD_RESPOND_ONLY_TO_MENTIONS",
+-		false,
++		true,
+ 	),
+ 	ALLOWED_CHANNEL_IDS: getEnvArray("CHANNEL_IDS", []),
+ 	DM_POLICY: (process.env?.DISCORD_DM_POLICY || "pairing") as
+diff --git a/typescript/messages.ts b/typescript/messages.ts
+index ee161a9..9f7ee4a 100644
+--- a/typescript/messages.ts
++++ b/typescript/messages.ts
+@@ -325,15 +325,22 @@ export class MessageManager {
+ 			return;
+ 		}
+ 
+-		if (
+-			this.discordSettings.shouldIgnoreDirectMessages &&
+-			message.channel.type === DiscordChannelType.DM
+-		) {
+-			return;
+-		}
+-
+ 		// DM policy check - applies access control policies for direct messages
+ 		if (message.channel.type === DiscordChannelType.DM) {
++			const userId = message.author.id;
++			if (this.discordSettings.shouldIgnoreDirectMessages) {
++				const staticallyAllowed =
++					this.discordSettings.allowFrom?.includes(userId) === true;
++				const dynamicallyAllowed = await isInAllowlist(
++					this.runtime,
++					"discord",
++					userId,
++				);
++				if (!staticallyAllowed && !dynamicallyAllowed) {
++					return;
++				}
++			}
++
+ 			const accessCheck = await this.checkDmAccess(message);
+ 			if (!accessCheck.allowed) {
+ 				// If a reply message was generated (new pairing request), send it
+@@ -629,6 +636,18 @@ export class MessageManager {
+ 				: null;
+ 			let typingStarted = false;
+ 			let responseEmitted = false;
++			let generationTimedOut = false;
++			const generationTimeoutMs = Math.max(
++				30_000,
++				Number.parseInt(
++					String(
++						this.runtime.getSetting("DISCORD_GENERATION_TIMEOUT_MS") ??
++							this.runtime.getSetting("MESSAGE_TIMEOUT_MS") ??
++							"120000",
++					),
++					10,
++				) || 120_000,
++			);
+ 
+ 			const finalizePendingDraft = async () => {
+ 				if (draftStream?.isStarted() && !draftStream.isDone()) {
+@@ -644,6 +663,34 @@ export class MessageManager {
+ 				}
+ 			};
+ 
++			const sendFailureReply = async (text: string) => {
++				try {
++					await channel.send({
++						content: text,
++						...(outboundReplyToMessageId && replyToMode !== "off"
++							? {
++									reply: {
++										messageReference: outboundReplyToMessageId,
++									},
++								}
++							: {}),
++					});
++					responseEmitted = true;
++				} catch (sendError) {
++					this.runtime.logger.warn(
++						{
++							src: "plugin:discord",
++							agentId: this.runtime.agentId,
++							error:
++								sendError instanceof Error
++									? sendError.message
++									: String(sendError),
++						},
++						"Failed to send Discord failure reply",
++					);
++				}
++			};
++
+ 			if (draftStream) {
+ 				await draftStream.start(channel, outboundReplyToMessageId, replyToMode);
+ 			} else {
+@@ -663,6 +710,9 @@ export class MessageManager {
+ 
+ 			const callback: HandlerCallback = async (content: Content) => {
+ 				try {
++					if (generationTimedOut) {
++						return [];
++					}
+ 					// target is set but not addressed to us handling
+ 					if (
+ 						content.target &&
+@@ -932,40 +982,87 @@ export class MessageManager {
+ 
+ 			const messagingAPI = getMessagingAPI(this.runtime);
+ 			const messageService = getMessageService(this.runtime);
+-
+-			if (messageService) {
+-				this.runtime.logger.debug(
+-					{ src: "plugin:discord", agentId: this.runtime.agentId },
+-					"Using messageService API",
+-				);
+-				await messageService.handleMessage(this.runtime, newMessage, callback);
+-			} else if (messagingAPI?.handleMessage) {
+-				this.runtime.logger.debug(
+-					{ src: "plugin:discord", agentId: this.runtime.agentId },
+-					"Using messaging API handleMessage",
+-				);
+-				await messagingAPI.handleMessage(this.runtime.agentId, newMessage, {
+-					onResponse: callback,
+-				});
+-			} else if (messagingAPI?.sendMessage) {
+-				this.runtime.logger.debug(
+-					{ src: "plugin:discord", agentId: this.runtime.agentId },
+-					"Using messaging API sendMessage",
+-				);
+-				await messagingAPI.sendMessage(this.runtime.agentId, newMessage, {
+-					onResponse: callback,
++			let generationTimeoutHandle: ReturnType<typeof setTimeout> | undefined;
++			try {
++				const generationPromise = (async () => {
++					if (messageService) {
++						this.runtime.logger.debug(
++							{ src: "plugin:discord", agentId: this.runtime.agentId },
++							"Using messageService API",
++						);
++						await messageService.handleMessage(this.runtime, newMessage, callback);
++					} else if (messagingAPI?.handleMessage) {
++						this.runtime.logger.debug(
++							{ src: "plugin:discord", agentId: this.runtime.agentId },
++							"Using messaging API handleMessage",
++						);
++						await messagingAPI.handleMessage(this.runtime.agentId, newMessage, {
++							onResponse: callback,
++						});
++					} else if (messagingAPI?.sendMessage) {
++						this.runtime.logger.debug(
++							{ src: "plugin:discord", agentId: this.runtime.agentId },
++							"Using messaging API sendMessage",
++						);
++						await messagingAPI.sendMessage(this.runtime.agentId, newMessage, {
++							onResponse: callback,
++						});
++					} else {
++						this.runtime.logger.debug(
++							{ src: "plugin:discord", agentId: this.runtime.agentId },
++							"Using event-based message handling",
++						);
++						await this.runtime.emitEvent([EventType.MESSAGE_RECEIVED], {
++							runtime: this.runtime,
++							message: newMessage,
++							callback,
++							source: "discord",
++						});
++					}
++				})();
++
++				const timeoutPromise = new Promise<never>((_, reject) => {
++					generationTimeoutHandle = setTimeout(() => {
++						generationTimedOut = true;
++						reject(
++							new Error(
++								`Discord generation timeout after ${generationTimeoutMs}ms`,
++							),
++						);
++					}, generationTimeoutMs);
+ 				});
+-			} else {
+-				this.runtime.logger.debug(
+-					{ src: "plugin:discord", agentId: this.runtime.agentId },
+-					"Using event-based message handling",
++
++				await Promise.race([generationPromise, timeoutPromise]);
++			} catch (generationError) {
++				this.runtime.logger.error(
++					{
++						src: "plugin:discord",
++						agentId: this.runtime.agentId,
++						messageId: message.id,
++						timeoutMs: generationTimeoutMs,
++						error:
++							generationError instanceof Error
++								? generationError.message
++								: String(generationError),
++					},
++					"Discord generation failed or timed out",
+ 				);
+-				await this.runtime.emitEvent([EventType.MESSAGE_RECEIVED], {
+-					runtime: this.runtime,
+-					message: newMessage,
+-					callback,
+-					source: "discord",
+-				});
++				typingController.stop();
++				statusReactions?.setError();
++				await abortPendingDraft();
++
++				if (!responseEmitted) {
++					await sendFailureReply(
++						generationTimedOut
++							? "I timed out while generating that reply. Please retry."
++							: "I hit a provider issue while generating the reply. Please retry.",
++					);
++				}
++				return;
++			} finally {
++				if (generationTimeoutHandle) {
++					clearTimeout(generationTimeoutHandle);
++				}
+ 			}
+ 
+ 			if (!responseEmitted) {

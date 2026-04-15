@@ -1885,7 +1885,7 @@ export async function handleChatRoutes(
             res,
             JSON.stringify({
               error: {
-                message: getErrorMessage(err),
+                message: getChatFailureReply(err, state.logBuffer),
                 type: "server_error",
               },
             }),
@@ -1969,7 +1969,7 @@ export async function handleChatRoutes(
     } catch (err) {
       json(
         res,
-        { error: { message: getErrorMessage(err), type: "server_error" } },
+        { error: { message: getChatFailureReply(err, state.logBuffer), type: "server_error" } },
         500,
       );
     }
@@ -2161,7 +2161,7 @@ export async function handleChatRoutes(
             res,
             {
               type: "error",
-              error: { type: "server_error", message: getErrorMessage(err) },
+              error: { type: "server_error", message: getChatFailureReply(err, state.logBuffer) },
             },
             "error",
           );
@@ -2240,7 +2240,7 @@ export async function handleChatRoutes(
     } catch (err) {
       json(
         res,
-        { error: { type: "server_error", message: getErrorMessage(err) } },
+        { error: { type: "server_error", message: getChatFailureReply(err, state.logBuffer) } },
         500,
       );
     }

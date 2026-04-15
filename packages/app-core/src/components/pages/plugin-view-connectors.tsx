@@ -152,8 +152,16 @@ function ConnectorPluginCard({
   testResults,
   togglingPlugins,
 }: ConnectorPluginCardProps) {
-  const { elizaCloudConnected, setActionNotice, setState, setTab } = useApp();
+  const {
+    elizaCloudConnected,
+    pendingRestart,
+    pendingRestartReasons,
+    setActionNotice,
+    setState,
+    setTab,
+  } = useApp();
   const [managedDiscordBusy, setManagedDiscordBusy] = useState(false);
+  const [discordRestarting, setDiscordRestarting] = useState(false);
   const [managedDiscordAgents, setManagedDiscordAgents] = useState<
     CloudCompatAgent[]
   >([]);
@@ -380,6 +388,38 @@ function ConnectorPluginCard({
       setManagedDiscordBusy(false);
     }
   };
+  const isDiscordRestartPending =
+    plugin.id === "discord" &&
+    pendingRestart &&
+    pendingRestartReasons.includes("Discord token updated");
+  const handleRestartAgent = async () => {
+    if (discordRestarting) {
+      return;
+    }
+    setDiscordRestarting(true);
+    try {
+      await client.restartAndWait(120_000);
+      setActionNotice(
+        t("pluginsview.DiscordRestartComplete", {
+          defaultValue: "Agent restarted. Discord is reconnecting now.",
+        }),
+        "success",
+        4200,
+      );
+    } catch (error) {
+      setActionNotice(
+        error instanceof Error
+          ? error.message
+          : t("pluginsview.DiscordRestartFailed", {
+              defaultValue: "Agent restart failed. Please try again.",
+            }),
+        "error",
+        5000,
+      );
+    } finally {
+      setDiscordRestarting(false);
+    }
+  };
 
   const connectorHeaderMedia = (
     <span
@@ -505,28 +545,43 @@ function ConnectorPluginCard({
       >
         {plugin.id === "discord" && (
           <PagePanel.Notice
-            tone="default"
+            tone={isDiscordRestartPending ? "warning" : "default"}
             className="mb-4"
             actions={
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 rounded-[var(--radius-lg)] px-4 text-xs-tight font-semibold"
-                onClick={() => {
-                  void handleOpenManagedDiscord();
-                }}
-                disabled={managedDiscordBusy}
-              >
-                {managedDiscordBusy
-                  ? "..."
-                  : elizaCloudConnected
-                    ? t("pluginsview.UseManagedDiscord", {
-                        defaultValue: "Use managed Discord",
-                      })
-                    : t("pluginsview.OpenElizaCloud", {
-                        defaultValue: "Open Eliza Cloud",
-                      })}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant={isDiscordRestartPending ? "default" : "outline"}
+                  size="sm"
+                  className="h-8 rounded-[var(--radius-lg)] px-4 text-xs-tight font-semibold"
+                  onClick={() => {
+                    void handleRestartAgent();
+                  }}
+                  disabled={discordRestarting}
+                >
+                  {discordRestarting
+                    ? t("common.restarting", { defaultValue: "Restarting…" })
+                    : t("common.restart", { defaultValue: "Restart agent" })}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 rounded-[var(--radius-lg)] px-4 text-xs-tight font-semibold"
+                  onClick={() => {
+                    void handleOpenManagedDiscord();
+                  }}
+                  disabled={managedDiscordBusy}
+                >
+                  {managedDiscordBusy
+                    ? "..."
+                    : elizaCloudConnected
+                      ? t("pluginsview.UseManagedDiscord", {
+                          defaultValue: "Use managed Discord",
+                        })
+                      : t("pluginsview.OpenElizaCloud", {
+                          defaultValue: "Open Eliza Cloud",
+                        })}
+                </Button>
+              </div>
             }
           >
             {elizaCloudConnected
@@ -538,6 +593,17 @@ function ConnectorPluginCard({
                   defaultValue:
                     "Prefer OAuth? Connect Eliza Cloud to use the shared Discord gateway instead of a local bot token.",
                 })}
+            <div className="mt-2 text-xs-tight text-muted">
+              {isDiscordRestartPending
+                ? t("pluginsview.DiscordTokenRestartPending", {
+                    defaultValue:
+                      "Applying changes: your new Discord token is saved and the agent is restarting.",
+                  })
+                : t("pluginsview.DiscordTokenRestartHint", {
+                    defaultValue:
+                      "Saving connector settings now restarts the agent automatically so new credentials are applied right away.",
+                  })}
+            </div>
             {managedDiscordPickerOpen && managedDiscordAgents.length > 1 ? (
               <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Select

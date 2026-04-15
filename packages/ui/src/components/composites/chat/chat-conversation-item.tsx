@@ -173,7 +173,9 @@ export function ChatConversationItem({
     typeof conversation.source === "string" && conversation.source.trim()
       ? conversation.source
       : null;
-  const showInlineActions = isGameModal;
+  const canRename = typeof onRequestRename === "function";
+  const canDelete = typeof onRequestDeleteConfirm === "function";
+  const showInlineActions = canRename || canDelete;
   const showSourceBadge =
     !isGameModal &&
     conversationSource !== null &&
@@ -259,7 +261,7 @@ export function ChatConversationItem({
         </div>
       ) : null}
 
-      {showInlineActions && !isConfirmingDelete ? (
+      {showInlineActions && canRename && !isConfirmingDelete ? (
         <Button
           size="icon"
           variant={isGameModal ? "ghost" : "surface"}
@@ -283,7 +285,7 @@ export function ChatConversationItem({
         </Button>
       ) : null}
 
-      {showInlineActions && !isConfirmingDelete ? (
+      {showInlineActions && canDelete && !isConfirmingDelete ? (
         <Button
           size="icon"
           variant={isGameModal ? "ghost" : "surfaceDestructive"}

@@ -22,6 +22,24 @@ interface AgentStartupDiagnostics {
   nextRetryAt?: number;
 }
 
+type ChatRoutingDiagnostics = {
+  primary: string;
+  fallback: string;
+  lastSelectedProvider: string | null;
+  lastEffectiveProvider: string | null;
+  lastRouteSource: "policy" | "manual";
+  lastFallbackReason: string | null;
+  lastErrorClass: string | null;
+  lastErrorMessage: string | null;
+  lastErrorHttpStatus?: number | null;
+  lastErrorRawBody?: string | null;
+  lastUpdatedAt: number;
+  providers: Record<
+    string,
+    { degradedUntilMs: number; lastErrorAt?: number; lastErrorClass?: string }
+  >;
+};
+
 export interface HealthRouteState {
   runtime: AgentRuntime | null;
   config: ElizaConfig;
@@ -44,6 +62,21 @@ export interface HealthRouteContext {
   state: HealthRouteState;
   json: (res: http.ServerResponse, data: unknown, status?: number) => void;
   error: (res: http.ServerResponse, message: string, status?: number) => void;
+}
+
+function readChatRoutingDiagnostics(
+  runtime: AgentRuntime | null,
+): ChatRoutingDiagnostics | null {
+  if (!runtime) {
+    return null;
+  }
+  const value = (
+    runtime as unknown as { __chatRoutingDiagnostics?: ChatRoutingDiagnostics }
+  ).__chatRoutingDiagnostics;
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  return value;
 }
 
 // ---------------------------------------------------------------------------
@@ -390,6 +423,7 @@ export async function handleHealthRoutes(
       cloudProvisioned,
       hasApiKey: hasCloudApiKey,
     };
+    const chatRouting = readChatRoutingDiagnostics(state.runtime);
 
     json(res, {
       state: state.agentState,
@@ -399,6 +433,7 @@ export async function handleHealthRoutes(
       uptime,
       startup: state.startup,
       cloud: cloudStatus,
+      chatRouting,
       pendingRestart: state.pendingRestartReasons.length > 0,
       pendingRestartReasons: state.pendingRestartReasons,
     });

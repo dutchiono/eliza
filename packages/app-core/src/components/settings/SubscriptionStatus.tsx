@@ -225,17 +225,30 @@ export function SubscriptionStatus({
 
   const handleOpenAIExchange = useCallback(async () => {
     if (openaiExchangeBusyRef.current) return;
-    const normalized = normalizeOpenAICallbackInput(openaiCallbackRef.current);
-    if (normalized.ok === false) {
-      setOpenaiError(t(normalized.error));
-      return;
-    }
 
     openaiExchangeBusyRef.current = true;
     setOpenaiExchangeBusy(true);
     setOpenaiError("");
     try {
-      const data = await client.exchangeOpenAICode(normalized.code);
+      const callbackValue = openaiCallbackRef.current.trim();
+      let data:
+        | {
+            success: boolean;
+            expiresAt?: string;
+            accountId?: string;
+            error?: string;
+          }
+        | null = null;
+      if (callbackValue.length > 0) {
+        const normalized = normalizeOpenAICallbackInput(callbackValue);
+        if (normalized.ok === false) {
+          setOpenaiError(t(normalized.error));
+          return;
+        }
+        data = await client.exchangeOpenAICode(normalized.code);
+      } else {
+        data = await client.exchangeOpenAICode({ waitForCallback: true });
+      }
       if (data.success) {
         setOpenaiConnected(true);
         setOpenaiOAuthStarted(false);
@@ -556,7 +569,7 @@ export function SubscriptionStatus({
                   variant="default"
                   size="sm"
                   className="!mt-0"
-                  disabled={openaiExchangeBusy || !openaiCallbackUrl.trim()}
+                  disabled={openaiExchangeBusy}
                   onClick={() => void handleOpenAIExchange()}
                 >
                   {openaiExchangeBusy
