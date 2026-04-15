@@ -186,6 +186,19 @@ function PendingAuthBanner({
   }, [url]);
 
   const handleOpen = useCallback(() => {
+    // Validate the URL is a real Google OAuth endpoint before opening —
+    // defense-in-depth in case the API response is ever unexpected.
+    try {
+      const parsed = new URL(url);
+      if (
+        parsed.protocol !== "https:" ||
+        parsed.hostname !== "accounts.google.com"
+      ) {
+        return;
+      }
+    } catch {
+      return;
+    }
     window.open(url, "_blank", "noopener,noreferrer");
   }, [url]);
 

@@ -200,6 +200,9 @@ export function useGoogleLifeOpsConnector(
   const [loading, setLoading] = useState(true);
   const [actionPending, setActionPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // `pendingAuthUrl` is local React state — it resets to null automatically when
+  // the component unmounts, so there's no risk of a stale auth URL reappearing
+  // after navigation.
   const [pendingAuthUrl, setPendingAuthUrl] = useState<string | null>(null);
   const runtimeReady = isLifeOpsRuntimeReady({
     startupPhase,
