@@ -302,10 +302,13 @@ export function buildApplicationMenu({
         { role: "undo" },
         { role: "redo" },
         { type: "separator" },
-        { role: "cut" },
-        { role: "copy" },
-        { role: "paste" },
-        { role: "selectAll" },
+        { role: "cut", accelerator: isMac ? "Command+X" : "Ctrl+X" },
+        { role: "copy", accelerator: isMac ? "Command+C" : "Ctrl+C" },
+        { role: "paste", accelerator: isMac ? "Command+V" : "Ctrl+V" },
+        {
+          role: "selectAll",
+          accelerator: isMac ? "Command+A" : "Ctrl+A",
+        },
       ],
     },
     {

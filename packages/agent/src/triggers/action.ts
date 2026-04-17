@@ -233,6 +233,7 @@ export const createTriggerTaskAction: Action = {
 
       const creator = String(message.entityId ?? runtime.agentId);
       const triggerType = deriveTriggerType(extraction);
+      const parsedIntervalMs = parsePositiveInteger(extraction.intervalMs);
       const normalized = normalizeTriggerDraft({
         input: {
           displayName:
@@ -245,7 +246,10 @@ export const createTriggerTaskAction: Action = {
               : "inject_now",
           enabled: true,
           createdBy: creator,
-          intervalMs: parsePositiveInteger(extraction.intervalMs),
+          intervalMs:
+            triggerType === "interval"
+              ? (parsedIntervalMs ?? 3_600_000)
+              : parsedIntervalMs,
           scheduledAtIso: extraction.scheduledAtIso,
           cronExpression: extraction.cronExpression,
           maxRuns: parsePositiveInteger(extraction.maxRuns),
