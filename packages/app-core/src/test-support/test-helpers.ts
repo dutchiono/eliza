@@ -355,7 +355,8 @@ export function resolveFeishuPluginImportSpecifier(): string | null {
   return null;
 }
 
-const WECHAT_PLUGIN_PACKAGE_NAME = "@miladyai/plugin-wechat";
+const WECHAT_PLUGIN_PACKAGE_NAME = "@elizaos/plugin-wechat";
+const WECHAT_PLUGIN_LEGACY_PACKAGE_NAME = "@miladyai/plugin-wechat";
 const WECHAT_PLUGIN_LOCAL_ENTRY_CANDIDATES = [
   "src/index.ts",
   "dist/index.js",
@@ -365,16 +366,37 @@ export function resolveWechatPluginImportSpecifier(): string | null {
   if (isPackageImportResolvable(WECHAT_PLUGIN_PACKAGE_NAME)) {
     return WECHAT_PLUGIN_PACKAGE_NAME;
   }
+  if (isPackageImportResolvable(WECHAT_PLUGIN_LEGACY_PACKAGE_NAME)) {
+    return WECHAT_PLUGIN_LEGACY_PACKAGE_NAME;
+  }
 
   const helperDir = path.dirname(fileURLToPath(import.meta.url));
   const packageRoot = path.resolve(helperDir, "..", "..");
 
-  // Check node_modules
+  // Check node_modules for either the canonical or legacy package name.
+  for (const packageName of [
+    WECHAT_PLUGIN_PACKAGE_NAME,
+    WECHAT_PLUGIN_LEGACY_PACKAGE_NAME,
+  ]) {
+    const packageSegments = packageName.split("/");
+    for (const relativeEntryPath of WECHAT_PLUGIN_LOCAL_ENTRY_CANDIDATES) {
+      const nodeModulesEntry = path.resolve(
+        packageRoot,
+        "node_modules",
+        ...packageSegments,
+        relativeEntryPath,
+      );
+      if (existsSync(nodeModulesEntry)) {
+        return pathToFileURL(nodeModulesEntry).href;
+      }
+    }
+  }
+
   for (const relativeEntryPath of WECHAT_PLUGIN_LOCAL_ENTRY_CANDIDATES) {
     const nodeModulesEntry = path.resolve(
       packageRoot,
       "node_modules",
-      "@miladyai",
+      "@elizaos",
       "plugin-wechat",
       relativeEntryPath,
     );
