@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   applyIosAppIdentity,
   isCapacitorPlatformReady,
+  patchGradleFileForAgp9,
+  repairMalformedAndroidGradleForAgp9,
   resolveIosBuildTarget,
   resolvePlatformTemplateRoot,
   shouldRunIosPodInstall,
@@ -679,6 +681,70 @@ describe("run-mobile-build", () => {
       destination: "generic/platform=iOS",
       sdk: "iphoneos",
     });
+  });
+
+  it("repairs malformed AGP9 Gradle blocks before patching", () => {
+    const broken = [
+      "apply plugin: 'com.android.library'",
+      "",
+      '    namespace = "ai.annadata.plugin.capacitor"',
+      '    namespace "ai.annadata.plugin.capacitor"',
+      "    compileSdk 35",
+      "}",
+      "",
+    ].join("\n");
+
+    expect(repairMalformedAndroidGradleForAgp9(broken)).toBe(
+      [
+        "apply plugin: 'com.android.library'",
+        "",
+        "android {",
+        '    namespace = "ai.annadata.plugin.capacitor"',
+        "    compileSdk 35",
+        "}",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("repairs malformed llama.cpp Android Gradle files on disk", () => {
+    const gradleFile = path.join(makeTempDir(), "build.gradle");
+    writeFile(
+      gradleFile,
+      [
+        "apply plugin: 'com.android.library'",
+        "",
+        '    namespace = "ai.annadata.plugin.capacitor"',
+        '    namespace "ai.annadata.plugin.capacitor"',
+        "    compileSdk 35",
+        "    buildTypes {",
+        "        release {",
+        "            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'",
+        "        }",
+        "    }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    patchGradleFileForAgp9(gradleFile, "llama-cpp-capacitor");
+
+    expect(fs.readFileSync(gradleFile, "utf8")).toBe(
+      [
+        "apply plugin: 'com.android.library'",
+        "",
+        "android {",
+        '    namespace = "ai.annadata.plugin.capacitor"',
+        "    compileSdk 35",
+        "    buildTypes {",
+        "        release {",
+        "            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'",
+        "        }",
+        "    }",
+        "}",
+        "",
+      ].join("\n"),
+    );
   });
 
   it("allows explicit iOS build target overrides", () => {

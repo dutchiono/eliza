@@ -499,10 +499,24 @@ function patchLlamaCppCapacitorGradle() {
   );
 }
 
-function patchGradleFileForAgp9(filePath, label) {
+export function repairMalformedAndroidGradleForAgp9(content) {
+  let repaired = content.replace(
+    /^(\s*apply plugin:\s*['"][^'"]+['"]\s*\r?\n)(\r?\n)?(?=\s*namespace\s*=)/m,
+    (_, pluginLine, blankLine = "") => `${pluginLine}${blankLine}android {\n`,
+  );
+
+  repaired = repaired.replace(
+    /^(\s*namespace\s*=\s*["'][^"']+["']\s*\r?\n)\s*namespace\s+["'][^"']+["']\s*\r?\n/m,
+    "$1",
+  );
+
+  return repaired;
+}
+
+export function patchGradleFileForAgp9(filePath, label) {
   if (!fs.existsSync(filePath)) return;
   const current = fs.readFileSync(filePath, "utf8");
-  const patched = current
+  const patched = repairMalformedAndroidGradleForAgp9(current)
     .replace(
       /^\s*apply plugin:\s*['"](org\.jetbrains\.kotlin\.android|kotlin-android)['"]\s*\r?\n/gm,
       "",
