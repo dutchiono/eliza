@@ -762,7 +762,7 @@ export class PluginManagerService extends Service implements PluginRegistry {
 					await fs.ensureSymlink(
 						ejectedDir,
 						targetDir,
-						"junction" as fs.SymlinkType,
+						"junction",
 					);
 
 					installed = true;

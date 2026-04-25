@@ -274,8 +274,5 @@ async function readResponseWithLimit(
 		}
 	}
 
-	return Buffer.concat(
-		chunks.map((chunk) => Buffer.from(chunk)),
-		total,
-	);
+	return Buffer.concat(chunks, total);
 }

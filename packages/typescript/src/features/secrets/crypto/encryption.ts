@@ -28,6 +28,10 @@ const KEY_LENGTH = 32; // 256 bits
 const DEFAULT_SALT_LENGTH = 32;
 const DEFAULT_PBKDF2_ITERATIONS = 100000;
 
+function toUint8Array(data: Buffer): Uint8Array {
+	return Uint8Array.from(data);
+}
+
 // ============================================================================
 // Key Derivation
 // ============================================================================
@@ -61,7 +65,13 @@ export function deriveKeyPbkdf2(
 ): Buffer {
 	const saltBuffer =
 		typeof salt === "string" ? Buffer.from(salt, "base64") : salt;
-	return pbkdf2Sync(password, saltBuffer, iterations, KEY_LENGTH, "sha256");
+	return pbkdf2Sync(
+		password,
+		toUint8Array(saltBuffer),
+		iterations,
+		KEY_LENGTH,
+		"sha256",
+	);
 }
 
 /**
@@ -77,7 +87,7 @@ export function deriveKeyScrypt(
 ): Buffer {
 	const saltBuffer =
 		typeof salt === "string" ? Buffer.from(salt, "base64") : salt;
-	return scryptSync(password, saltBuffer, KEY_LENGTH, {
+	return scryptSync(password, toUint8Array(saltBuffer), KEY_LENGTH, {
 		N: 16384,
 		r: 8,
 		p: 1,
@@ -145,7 +155,7 @@ export function encryptGcm(
 	}
 
 	const iv = randomBytes(IV_LENGTH);
-	const cipher = createCipheriv(ALGORITHM_GCM, key, iv);
+	const cipher = createCipheriv(ALGORITHM_GCM, toUint8Array(key), toUint8Array(iv));
 
 	let encrypted = cipher.update(plaintext, "utf8", "base64");
 	encrypted += cipher.final("base64");
@@ -226,8 +236,12 @@ export function decryptGcm(encrypted: EncryptedSecret, key: Buffer): string {
 
 	const iv = Buffer.from(encrypted.iv, "base64");
 	const authTag = Buffer.from(encrypted.authTag, "base64");
-	const decipher = createDecipheriv(ALGORITHM_GCM, key, iv);
-	decipher.setAuthTag(authTag);
+	const decipher = createDecipheriv(
+		ALGORITHM_GCM,
+		toUint8Array(key),
+		toUint8Array(iv),
+	);
+	decipher.setAuthTag(toUint8Array(authTag));
 
 	let decrypted = decipher.update(encrypted.value, "base64", "utf8");
 	decrypted += decipher.final("utf8");
@@ -256,7 +270,11 @@ export function decryptCbc(encrypted: EncryptedSecret, key: Buffer): string {
 	}
 
 	const iv = Buffer.from(encrypted.iv, "base64");
-	const decipher = createDecipheriv(ALGORITHM_CBC, key, iv);
+	const decipher = createDecipheriv(
+		ALGORITHM_CBC,
+		toUint8Array(key),
+		toUint8Array(iv),
+	);
 
 	let decrypted = decipher.update(encrypted.value, "base64", "utf8");
 	decrypted += decipher.final("utf8");

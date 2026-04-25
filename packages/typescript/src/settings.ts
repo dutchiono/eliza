@@ -156,10 +156,10 @@ export function encryptStringValue(value: string, salt: string): string {
 		.update(salt)
 		.digest()
 		.slice(0, 32);
-	const iv = BufferUtils.randomBytes(12);
+	const iv = Uint8Array.from(BufferUtils.randomBytes(12));
 
 	const aad = new TextEncoder().encode("elizaos:settings:v2");
-	const plaintextBytes = BufferUtils.fromString(value, "utf8");
+	const plaintextBytes = Uint8Array.from(BufferUtils.fromString(value, "utf8"));
 	const { ciphertext, tag } = cryptoUtils.encryptAes256Gcm(
 		key,
 		iv,
@@ -184,9 +184,9 @@ export function decryptStringValue(value: string, salt: string): string {
 		// v2: AES-256-GCM with tag
 		if (isEncryptedV2(value)) {
 			// v2:<ivHex>:<ciphertextHex>:<tagHex>
-			const iv = BufferUtils.fromHex(parts[1]);
-			const ciphertext = BufferUtils.fromHex(parts[2]);
-			const tag = BufferUtils.fromHex(parts[3]);
+			const iv = Uint8Array.from(BufferUtils.fromHex(parts[1]));
+			const ciphertext = Uint8Array.from(BufferUtils.fromHex(parts[2]));
+			const tag = Uint8Array.from(BufferUtils.fromHex(parts[3]));
 
 			const key = cryptoUtils
 				.createHash("sha256")
@@ -209,7 +209,7 @@ export function decryptStringValue(value: string, salt: string): string {
 			return value;
 		}
 
-		const iv = BufferUtils.fromHex(parts[0]);
+		const iv = Uint8Array.from(BufferUtils.fromHex(parts[0]));
 		const encrypted = parts[1];
 
 		const key = cryptoUtils

@@ -37,7 +37,9 @@ const BUN_TYPES_LINK_ROOTS = [
 const MATERIALIZED_TYPE_PACKAGES = [
   "chai",
   "cross-spawn",
+  "fast-redact",
   "fs-extra",
+  "markdown-it",
   "mdx",
   "node",
   "pg",

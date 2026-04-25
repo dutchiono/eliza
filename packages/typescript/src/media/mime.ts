@@ -105,7 +105,9 @@ async function sniffMime(
 	try {
 		const fileTypeFromBuffer = await getFileTypeFromBuffer();
 		if (!fileTypeFromBuffer) return undefined;
-		const type = await fileTypeFromBuffer(buffer);
+		const type = await fileTypeFromBuffer(
+			Buffer.isBuffer(buffer) ? Uint8Array.from(buffer) : buffer,
+		);
 		return type?.mime ?? undefined;
 	} catch {
 		return undefined;

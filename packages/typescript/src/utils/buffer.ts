@@ -168,14 +168,13 @@ export function fromBytes(bytes: number[] | Uint8Array): BufferLike {
  * @returns A new BufferLike object
  */
 export function concat(buffers: BufferLike[]): BufferLike {
-	if (hasNativeBuffer() && buffers.every((b) => Buffer.isBuffer(b))) {
-		return Buffer.concat(buffers as Buffer[]);
-	}
+	const totalLength = buffers.reduce((sum, buffer) => sum + buffer.length, 0);
 
-	// Calculate total length
-	let totalLength = 0;
-	for (const buffer of buffers) {
-		totalLength += buffer.length;
+	if (hasNativeBuffer() && buffers.every((b) => Buffer.isBuffer(b))) {
+		return Buffer.concat(
+			buffers.map((buffer) => Uint8Array.from(buffer)),
+			totalLength,
+		);
 	}
 
 	// Create result buffer and copy data

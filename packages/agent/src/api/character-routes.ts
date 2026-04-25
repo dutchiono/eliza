@@ -208,6 +208,15 @@ function syncRuntimeCharacterToConfig(
   };
 
   config.agents.list = [nextAgent, ...existingList.slice(1)];
+  const uiConfig = ((config as CharacterAutonomousConfigLike & {
+    ui?: { assistant?: { name?: string } };
+  }).ui ??= {});
+  if (typeof nextAgent.name === "string" && nextAgent.name.trim()) {
+    uiConfig.assistant = {
+      ...(uiConfig.assistant ?? {}),
+      name: nextAgent.name,
+    };
+  }
   saveConfig?.(config);
 }
 

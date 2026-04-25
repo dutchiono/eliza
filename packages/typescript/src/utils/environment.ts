@@ -11,6 +11,10 @@ import { parseBooleanValue } from "./boolean.js";
  */
 export type RuntimeEnvironment = "node" | "browser" | "unknown";
 
+type ProcessWithBuiltinModule = NodeJS.Process & {
+	getBuiltinModule?: (id: string) => unknown;
+};
+
 /**
  * Interface for environment configuration
  */
@@ -307,7 +311,9 @@ export function findEnvFile(
 		return null;
 	}
 
-	const moduleBuiltin = process.getBuiltinModule?.("module") as
+	const moduleBuiltin = (process as ProcessWithBuiltinModule).getBuiltinModule?.(
+		"module",
+	) as
 		| { createRequire?: (filename: string) => NodeJS.Require }
 		| undefined;
 	const nodeRequire = moduleBuiltin?.createRequire?.(import.meta.url);
@@ -352,7 +358,9 @@ export function loadEnvFile(envPath?: string): boolean {
 		return false;
 	}
 
-	const moduleBuiltin = process.getBuiltinModule?.("module") as
+	const moduleBuiltin = (process as ProcessWithBuiltinModule).getBuiltinModule?.(
+		"module",
+	) as
 		| { createRequire?: (filename: string) => NodeJS.Require }
 		| undefined;
 	const nodeRequire = moduleBuiltin?.createRequire?.(import.meta.url);
