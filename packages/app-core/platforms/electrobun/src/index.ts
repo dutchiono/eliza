@@ -1582,6 +1582,8 @@ async function _startAgent(win: BrowserWindow): Promise<void> {
     pid: process.pid,
     exec_path: process.execPath,
     bundle_path: resolveStartupBundlePath(process.execPath),
+    main_window_partition: resolveMainWindowPartition(process.env),
+    user_data_path: Utils.paths.userData,
   });
 
   try {
@@ -2023,6 +2025,8 @@ async function main(): Promise<void> {
     pid: process.pid,
     exec_path: process.execPath,
     bundle_path: resolveStartupBundlePath(process.execPath),
+    main_window_partition: resolveMainWindowPartition(process.env),
+    user_data_path: Utils.paths.userData,
   });
   await loadTheAppEnvFilesForMain();
   console.log(`[Main] Starting ${BRAND.appName} (Electrobun)`);
@@ -2141,6 +2145,8 @@ async function main(): Promise<void> {
   const mainWin = attachMainWindow(await createMainWindow());
   recordStartupPhase("window_ready", {
     pid: process.pid,
+    main_window_partition: resolveMainWindowPartition(process.env),
+    user_data_path: Utils.paths.userData,
   });
 
   // Configure the floating chat manager now that the renderer URL is resolved.

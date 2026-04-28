@@ -27,6 +27,8 @@ export type StartupTraceState = {
   port: number | null;
   exec_path: string | null;
   bundle_path: string | null;
+  main_window_partition: string | null;
+  user_data_path: string | null;
   elapsed_ms: number;
   error: string | null;
   exit_code: number | null;
@@ -41,6 +43,8 @@ type StartupTraceUpdate = Partial<
     | "port"
     | "exec_path"
     | "bundle_path"
+    | "main_window_partition"
+    | "user_data_path"
     | "error"
     | "exit_code"
   >
@@ -197,17 +201,17 @@ export function getStartupTraceConfig(
 ): StartupTraceConfig {
   const bootstrap = readStartupTraceBootstrap(execPath, platform);
   const sessionId =
-    trimEnv(env.ELIZA_STARTUP_SESSION_ID) ??
+    trimEnv(env.MILADY_STARTUP_SESSION_ID) ??
     trimEnv(env.ELIZA_STARTUP_SESSION_ID) ??
     trimEnv(bootstrap?.session_id ?? undefined) ??
     null;
   const stateFile =
-    trimEnv(env.ELIZA_STARTUP_STATE_FILE) ??
+    trimEnv(env.MILADY_STARTUP_STATE_FILE) ??
     trimEnv(env.ELIZA_STARTUP_STATE_FILE) ??
     trimEnv(bootstrap?.state_file ?? undefined) ??
     null;
   const eventsFile =
-    trimEnv(env.ELIZA_STARTUP_EVENTS_FILE) ??
+    trimEnv(env.MILADY_STARTUP_EVENTS_FILE) ??
     trimEnv(env.ELIZA_STARTUP_EVENTS_FILE) ??
     trimEnv(bootstrap?.events_file ?? undefined) ??
     null;
@@ -285,6 +289,15 @@ export function recordStartupPhase(
         ? update.bundle_path
         : (previous?.bundle_path ??
           resolveStartupBundlePath(stateExecPath ?? "")),
+    main_window_partition:
+      hasOwn(update, "main_window_partition") &&
+      update.main_window_partition !== undefined
+        ? update.main_window_partition
+        : (previous?.main_window_partition ?? null),
+    user_data_path:
+      hasOwn(update, "user_data_path") && update.user_data_path !== undefined
+        ? update.user_data_path
+        : (previous?.user_data_path ?? null),
     elapsed_ms: now - startedAt,
     error:
       hasOwn(update, "error") && update.error !== undefined
