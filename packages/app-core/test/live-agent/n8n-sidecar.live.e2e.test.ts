@@ -149,10 +149,12 @@ describeIf(CAN_RUN)("Live: n8n sidecar end-to-end", () => {
 
       const ownerStat = await fs.promises.stat(ownerJsonPath);
       const apiKeyStat = await fs.promises.stat(apiKeyPath);
-      // eslint-disable-next-line no-bitwise
-      expect(ownerStat.mode & 0o777).toBe(0o600);
-      // eslint-disable-next-line no-bitwise
-      expect(apiKeyStat.mode & 0o777).toBe(0o600);
+      if (process.platform !== "win32") {
+        // eslint-disable-next-line no-bitwise
+        expect(ownerStat.mode & 0o777).toBe(0o600);
+        // eslint-disable-next-line no-bitwise
+        expect(apiKeyStat.mode & 0o777).toBe(0o600);
+      }
 
       const persistedKey = await fs.promises.readFile(apiKeyPath, "utf-8");
       expect(persistedKey.trim()).toBe(apiKey);
