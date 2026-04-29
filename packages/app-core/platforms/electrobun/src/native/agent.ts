@@ -1033,6 +1033,7 @@ export class AgentManager {
   private stdioAbortController: AbortController | null = null;
   private hasPgliteError = false;
   private pgliteRecoveryDone = false;
+  private firstModuleNotFoundStderrLine: string | null = null;
   private startupPhase = "not_started";
 
   constructor() {
@@ -1343,8 +1344,15 @@ export class AgentManager {
 
       // Drain stderr to diagnostic log; detect PGLite migration failures
       this.hasPgliteError = false;
+      this.firstModuleNotFoundStderrLine = null;
       if (proc.stderr) {
         drainStderrToLog(proc.stderr, signal, (line) => {
+          if (
+            this.firstModuleNotFoundStderrLine === null &&
+            /cannot find module|module not found/i.test(line)
+          ) {
+            this.firstModuleNotFoundStderrLine = line.trim();
+          }
           if (shouldAutoRecoverPgliteFailure(line)) {
             this.hasPgliteError = true;
           }
@@ -1374,6 +1382,15 @@ export class AgentManager {
         if (proc.exitCode !== null) {
           const errMsg = `Child process exited with code ${proc.exitCode} before becoming healthy`;
           diagnosticLog(`[Agent] ${errMsg}`);
+          diagnosticLog(`[Agent] Runtime dist at failure: ${runtimeDistPath}`);
+          diagnosticLog(
+            `[Agent] Child NODE_PATH at failure: ${childEnv.NODE_PATH ?? "(unset)"}`,
+          );
+          if (this.firstModuleNotFoundStderrLine) {
+            diagnosticLog(
+              `[Agent] First module-not-found stderr line: ${this.firstModuleNotFoundStderrLine}`,
+            );
+          }
           this.childProcess = null;
           this.status = {
             state: "error",

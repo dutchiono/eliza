@@ -126,6 +126,8 @@ const requiredWorkflowSnippets = [
   "Extract Windows app bundle for Inno Setup",
   '$extractDir = "C:\\m"',
   "eliza-dist/entry.js found",
+  "eliza-dist plugin-sql package manifest found",
+  "eliza-dist plugin-sql node runtime found",
   "Build Inno Setup installer",
   "packaging/inno/build-inno.ps1",
   '-BuildDir "C:\\m"',
