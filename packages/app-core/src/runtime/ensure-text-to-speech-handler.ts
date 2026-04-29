@@ -101,8 +101,9 @@ export async function ensureTextToSpeechHandler(
       "[eliza] Registered Edge TTS for runtime TEXT_TO_SPEECH (streaming / swarm voice)",
     );
   } catch (error) {
-    throw new Error(
-      `[eliza] Could not register Edge TTS for TEXT_TO_SPEECH: ${error instanceof Error ? error.message : String(error)}`,
+    logger.warn(
+      `[eliza] Could not register Edge TTS for TEXT_TO_SPEECH: ${error instanceof Error ? error.message : String(error)}. Continuing without Edge TTS handler.`,
     );
+    return;
   }
 }
