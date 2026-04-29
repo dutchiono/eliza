@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun run build:preload && PATH=\"$PWD/scripts/bin:$PATH\" bunx electrobun dev",
+    "dev": "bun run build:preload && node scripts/dev-electrobun.mjs",
     "build": "bun run build:preload && PATH=\"$PWD/scripts/bin:$PATH\" bunx electrobun build",
     "typecheck": "tsc --noEmit",
     "test": "bunx vitest run --config vitest.electrobun.config.ts --passWithNoTests",

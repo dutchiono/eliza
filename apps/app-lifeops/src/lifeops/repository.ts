@@ -1811,9 +1811,43 @@ export class LifeOpsRepository {
         dryRun: false,
       },
     );
+    await LifeOpsRepository.ensureConnectorGrantsTable(runtime);
     await LifeOpsRepository.ensureActivitySignalColumns(runtime);
     await LifeOpsRepository.ensureSchedulingNegotiationColumns(runtime);
     await LifeOpsRepository.ensureInboxCacheIndexes(runtime);
+  }
+
+  static async ensureConnectorGrantsTable(
+    runtime: IAgentRuntime,
+  ): Promise<void> {
+    await executeRawSql(
+      runtime,
+      `CREATE TABLE IF NOT EXISTS life_connector_grants (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        side TEXT NOT NULL DEFAULT 'owner',
+        identity_json TEXT NOT NULL DEFAULT '{}',
+        identity_email TEXT,
+        granted_scopes_json TEXT NOT NULL DEFAULT '[]',
+        capabilities_json TEXT NOT NULL DEFAULT '[]',
+        token_ref TEXT,
+        mode TEXT NOT NULL DEFAULT 'oauth',
+        execution_target TEXT NOT NULL DEFAULT 'local',
+        source_of_truth TEXT NOT NULL DEFAULT 'local_storage',
+        preferred_by_agent BOOLEAN NOT NULL DEFAULT FALSE,
+        cloud_connection_id TEXT,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        last_refresh_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+    );
+    await executeRawSql(
+      runtime,
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_life_connector_grants_identity
+         ON life_connector_grants (agent_id, provider, side, mode, identity_email)`,
+    );
   }
 
   static async ensureSchedulingNegotiationColumns(
@@ -3042,9 +3076,7 @@ export class LifeOpsRepository {
       signal.health !== null && signal.health !== undefined
         ? { ...signal.metadata, health: signal.health }
         : signal.metadata;
-    await executeRawSql(
-      this.runtime,
-      `INSERT INTO life_activity_signals (
+    const insertSql = `INSERT INTO life_activity_signals (
         id, agent_id, source, platform, state, observed_at, idle_state,
         idle_time_seconds, on_battery, metadata_json, created_at
       ) VALUES (
@@ -3059,8 +3091,35 @@ export class LifeOpsRepository {
         ${signal.onBattery === null ? "NULL" : sqlBoolean(signal.onBattery)},
         ${sqlJson(metadata)},
         ${sqlQuote(signal.createdAt)}
-      )`,
-    );
+      )`;
+    try {
+      await executeRawSql(this.runtime, insertSql);
+    } catch (initialError) {
+      // Some users carry forward older local DBs; reconcile table shape once and retry.
+      try {
+        await LifeOpsRepository.ensureActivitySignalColumns(this.runtime);
+        await executeRawSql(this.runtime, insertSql);
+      } catch (retryError) {
+        logger.warn(
+          {
+            agentId: signal.agentId,
+            source: signal.source,
+            platform: signal.platform,
+            state: signal.state,
+            error:
+              retryError instanceof Error
+                ? retryError.message
+                : String(retryError),
+            initialError:
+              initialError instanceof Error
+                ? initialError.message
+                : String(initialError),
+          },
+          "[lifeops] Dropping activity signal after DB insert failure.",
+        );
+        return;
+      }
+    }
 
     // Mirror into the canonical telemetry store. Dedupes on
     // (agent_id, dedupe_key) so re-persists and migrator replays are safe.
@@ -3349,14 +3408,22 @@ export class LifeOpsRepository {
   }
 
   async listConnectorGrants(agentId: string): Promise<LifeOpsConnectorGrant[]> {
-    const rows = await executeRawSql(
-      this.runtime,
-      `SELECT *
-         FROM life_connector_grants
-        WHERE agent_id = ${sqlQuote(agentId)}
-        ORDER BY created_at ASC`,
-    );
-    return rows.map(parseConnectorGrant);
+    try {
+      const rows = await executeRawSql(
+        this.runtime,
+        `SELECT *
+           FROM life_connector_grants
+          WHERE agent_id = ${sqlQuote(agentId)}
+          ORDER BY created_at ASC`,
+      );
+      return rows.map(parseConnectorGrant);
+    } catch (error) {
+      if (isMissingTableError(error, "life_connector_grants")) {
+        await LifeOpsRepository.ensureConnectorGrantsTable(this.runtime);
+        return [];
+      }
+      throw error;
+    }
   }
 
   async getConnectorGrant(
@@ -3365,19 +3432,27 @@ export class LifeOpsRepository {
     mode: LifeOpsConnectorGrant["mode"],
     side: LifeOpsConnectorSide = "owner",
   ): Promise<LifeOpsConnectorGrant | null> {
-    const rows = await executeRawSql(
-      this.runtime,
-      `SELECT *
-        FROM life_connector_grants
-        WHERE agent_id = ${sqlQuote(agentId)}
-          AND provider = ${sqlQuote(provider)}
-          AND side = ${sqlQuote(side)}
-          AND mode = ${sqlQuote(mode)}
-        ORDER BY updated_at DESC, created_at DESC
-        LIMIT 1`,
-    );
-    const row = rows[0];
-    return row ? parseConnectorGrant(row) : null;
+    try {
+      const rows = await executeRawSql(
+        this.runtime,
+        `SELECT *
+          FROM life_connector_grants
+          WHERE agent_id = ${sqlQuote(agentId)}
+            AND provider = ${sqlQuote(provider)}
+            AND side = ${sqlQuote(side)}
+            AND mode = ${sqlQuote(mode)}
+          ORDER BY updated_at DESC, created_at DESC
+          LIMIT 1`,
+      );
+      const row = rows[0];
+      return row ? parseConnectorGrant(row) : null;
+    } catch (error) {
+      if (isMissingTableError(error, "life_connector_grants")) {
+        await LifeOpsRepository.ensureConnectorGrantsTable(this.runtime);
+        return null;
+      }
+      throw error;
+    }
   }
 
   async deleteConnectorGrant(
@@ -3388,14 +3463,22 @@ export class LifeOpsRepository {
   ): Promise<void> {
     const modeClause = mode ? `AND mode = ${sqlQuote(mode)}` : "";
     const sideClause = side ? `AND side = ${sqlQuote(side)}` : "";
-    await executeRawSql(
-      this.runtime,
-      `DELETE FROM life_connector_grants
-        WHERE agent_id = ${sqlQuote(agentId)}
-          AND provider = ${sqlQuote(provider)}
-          ${modeClause}
-          ${sideClause}`,
-    );
+    try {
+      await executeRawSql(
+        this.runtime,
+        `DELETE FROM life_connector_grants
+          WHERE agent_id = ${sqlQuote(agentId)}
+            AND provider = ${sqlQuote(provider)}
+            ${modeClause}
+            ${sideClause}`,
+      );
+    } catch (error) {
+      if (isMissingTableError(error, "life_connector_grants")) {
+        await LifeOpsRepository.ensureConnectorGrantsTable(this.runtime);
+        return;
+      }
+      throw error;
+    }
   }
 
   async upsertCalendarEvent(
