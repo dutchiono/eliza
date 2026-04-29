@@ -492,11 +492,6 @@ function stageDesktopBuild() {
     label: "Ensuring app workspace dependencies are installed",
   });
 
-  runBun(["install", "--ignore-scripts"], {
-    cwd: ELECTROBUN_DIR,
-    label: "Ensuring Electrobun workspace dependencies are installed",
-  });
-
   runPackageBinary("vite", ["build"], {
     cwd: APP_DIR,
     env: { ...process.env, VITE_APP_VARIANT: variant },
