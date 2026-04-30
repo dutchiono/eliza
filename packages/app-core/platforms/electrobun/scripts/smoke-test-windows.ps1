@@ -748,9 +748,12 @@ try {
         $handler.UseProxy = $false
         $client = [System.Net.Http.HttpClient]::new($handler)
         $client.Timeout = [TimeSpan]::FromSeconds(3)
-        $task = $client.GetAsync($uri)
-        $task.Wait()
-        $statusCode = [int]$task.Result.StatusCode
+        $task = $client.GetAsync($uri, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead)
+        if (-not $task.Wait(4000)) {
+          throw "HttpClient timeout after 4s"
+        }
+        $responseMessage = $task.Result
+        $statusCode = [int]$responseMessage.StatusCode
         if (Test-BackendProbeStatus $statusCode) {
           $healthy = $true
           $healthCheckMethod = "HttpClient(no-proxy)"
@@ -763,6 +766,7 @@ try {
           Write-Host "Health check on port ${port} failed ($elapsed s): $($_.Exception.InnerException.Message ?? $_.Exception.Message)"
         }
       } finally {
+        if ($responseMessage) { $responseMessage.Dispose() }
         if ($client) { $client.Dispose() }
         if ($handler) { $handler.Dispose() }
       }
