@@ -564,6 +564,9 @@ $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 $healthy = $false
 $healthCheckMethod = $null
 $lastNetstatDump = [DateTime]::MinValue
+$startupTraceReadyAt = $null
+$startupTraceReadyGraceSeconds = 15
+$probeObservations = [System.Collections.Generic.List[string]]::new()
 
 function Dump-PortDiagnostics([int]$Port) {
   Write-Host "--- netstat for port $Port ---"
@@ -578,6 +581,38 @@ function Dump-PortDiagnostics([int]$Port) {
 function Test-BackendProbeStatus([int]$StatusCode) {
   # A 401 still proves the packaged backend is running and enforcing auth.
   return $StatusCode -eq 200 -or $StatusCode -eq 401
+}
+
+function Test-StartupTraceReady($StartupState) {
+  return (
+    $StartupState -and
+    ($StartupState.phase -eq "runtime_ready" -or $StartupState.phase -eq "metadata_ready")
+  )
+}
+
+function Test-StartupTraceOwnsLifecycle($StartupState) {
+  if (-not $StartupState) {
+    return $false
+  }
+
+  return $StartupState.phase -in @(
+    "child_spawned",
+    "health_ready",
+    "runtime_ready",
+    "metadata_ready",
+    "fatal"
+  )
+}
+
+function Add-ProbeObservation([string]$Message) {
+  if ([string]::IsNullOrWhiteSpace($Message)) {
+    return
+  }
+
+  $probeObservations.Add($Message)
+  while ($probeObservations.Count -gt 20) {
+    $probeObservations.RemoveAt(0)
+  }
 }
 
 function Dump-ProcessDiagnostics() {
@@ -697,6 +732,7 @@ function Dump-FailureDiagnostics([int]$Port) {
 try {
   while ((Get-Date) -lt $deadline) {
     $startupState = Get-StartupState
+    $startupTraceOwnsLifecycle = Test-StartupTraceOwnsLifecycle $startupState
 
     if (-not $launcher) {
       $launcher = Find-Launcher $selfExtractionRoot
@@ -708,6 +744,7 @@ try {
 
     if (
       $launcher -and
+      -not $startupTraceOwnsLifecycle -and
       -not (Get-Process -Name "launcher" -ErrorAction SilentlyContinue) -and
       (
         -not $launcherStarted -or
@@ -736,7 +773,24 @@ try {
       $lastNetstatDump = $now
     }
 
-    foreach ($port in Get-ObservedBackendPorts $BackendPort) {
+    if (Test-StartupTraceReady $startupState) {
+      if (-not $startupState.port) {
+        throw "Windows packaged app reached $($startupState.phase) without recording a backend port."
+      }
+
+      if (-not $startupTraceReadyAt) {
+        $startupTraceReadyAt = Get-Date
+        Write-Host "Startup trace reached $($startupState.phase) on port $($startupState.port). Waiting up to ${startupTraceReadyGraceSeconds}s for external /api/health confirmation."
+      }
+    }
+
+    $portsToProbe = if ($startupState -and $startupState.port) {
+      @([int]$startupState.port)
+    } else {
+      Get-ObservedBackendPorts $BackendPort
+    }
+
+    foreach ($port in $portsToProbe) {
       $uri = "http://127.0.0.1:${port}/api/health"
 
       # Method 1: .NET HttpClient with proxy explicitly disabled.
@@ -757,10 +811,13 @@ try {
         if (Test-BackendProbeStatus $statusCode) {
           $healthy = $true
           $healthCheckMethod = "HttpClient(no-proxy)"
+          Add-ProbeObservation "HttpClient(no-proxy) port $port -> HTTP $statusCode"
           Write-Host "Backend health check passed on port $port (via HttpClient, proxy bypassed, HTTP $statusCode)."
           break
         }
+        Add-ProbeObservation "HttpClient(no-proxy) port $port -> HTTP $statusCode"
       } catch {
+        Add-ProbeObservation "HttpClient(no-proxy) port $port -> $($_.Exception.InnerException.Message ?? $_.Exception.Message)"
         $elapsed = [int]((Get-Date) - $deadline.AddSeconds(-$TimeoutSeconds)).TotalSeconds
         if ($elapsed % 30 -lt 3) {
           Write-Host "Health check on port ${port} failed ($elapsed s): $($_.Exception.InnerException.Message ?? $_.Exception.Message)"
@@ -778,8 +835,12 @@ try {
           if ($curlResult -eq "200" -or $curlResult -eq "401") {
             $healthy = $true
             $healthCheckMethod = "curl.exe"
+            Add-ProbeObservation "curl.exe port $port -> HTTP $curlResult"
             Write-Host "Backend health check passed on port $port (via curl.exe, HTTP $curlResult)."
             break
+          }
+          if ($curlResult) {
+            Add-ProbeObservation "curl.exe port $port -> HTTP $curlResult"
           }
         } catch {}
       }
@@ -791,27 +852,30 @@ try {
           if (Test-BackendProbeStatus ([int]$response.StatusCode)) {
             $healthy = $true
             $healthCheckMethod = "Invoke-WebRequest(-NoProxy)"
+            Add-ProbeObservation "Invoke-WebRequest(-NoProxy) port $port -> HTTP $($response.StatusCode)"
             Write-Host "Backend health check passed on port $port (via Invoke-WebRequest -NoProxy, HTTP $($response.StatusCode))."
             break
           }
+          Add-ProbeObservation "Invoke-WebRequest(-NoProxy) port $port -> HTTP $($response.StatusCode)"
         } catch {}
       }
     }
 
     if (
-      $startupState -and
-      ($startupState.phase -eq "runtime_ready" -or $startupState.phase -eq "metadata_ready") -and
-      -not $startupState.port
-    ) {
-      throw "Windows packaged app reached $($startupState.phase) without recording a backend port."
-    }
-
-    if (
-      $startupState -and
-      ($startupState.phase -eq "runtime_ready" -or $startupState.phase -eq "metadata_ready") -and
+      Test-StartupTraceReady $startupState -and
       -not $healthy
     ) {
       Write-Host "Startup trace reached $($startupState.phase) but /api/health has not responded yet."
+
+      if ($startupTraceReadyAt -and ((Get-Date) - $startupTraceReadyAt).TotalSeconds -ge $startupTraceReadyGraceSeconds) {
+        $observedPort = [int]$startupState.port
+        $recentProbeSummary = if ($probeObservations.Count -gt 0) {
+          ($probeObservations | Select-Object -Last 6) -join "; "
+        } else {
+          "no external probe result recorded"
+        }
+        throw "Windows packaged app reported $($startupState.phase) on port $observedPort, but external /api/health remained unreachable after ${startupTraceReadyGraceSeconds}s. Recent probe results: $recentProbeSummary"
+      }
     }
 
     if ($healthy) {
