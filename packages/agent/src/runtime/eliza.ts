@@ -96,7 +96,6 @@ import * as pluginAgentSkills from "@elizaos/plugin-agent-skills";
 import * as pluginAnthropic from "@elizaos/plugin-anthropic";
 import * as pluginBrowserBridge from "@elizaos/plugin-browser-bridge";
 import * as pluginLocalEmbedding from "@elizaos/plugin-local-embedding";
-import * as pluginPdf from "@elizaos/plugin-pdf";
 import * as pluginSql from "@elizaos/plugin-sql";
 import {
   getDefaultStylePreset,
@@ -319,7 +318,6 @@ Object.assign(STATIC_ELIZA_PLUGINS, {
   // plugin-manager: now built-in core capability (ENABLE_PLUGIN_MANAGER)
   "@elizaos/plugin-agent-skills": pluginAgentSkills,
   ...(pluginCommands ? { "@elizaos/plugin-commands": pluginCommands } : {}),
-  "@elizaos/plugin-pdf": pluginPdf,
   ...(pluginOpenai ? { "@elizaos/plugin-openai": pluginOpenai } : {}),
   "@elizaos/plugin-anthropic": pluginAnthropic,
   ...(pluginOllama ? { "@elizaos/plugin-ollama": pluginOllama } : {}),
