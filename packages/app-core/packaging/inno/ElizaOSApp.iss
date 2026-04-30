@@ -1,7 +1,7 @@
 #define MyAppId "__APP_ID__"
 #define MyAppName "__APP_NAME__"
 #define MyAppVersion "__APP_VERSION__"
-#define MyAppPublisher "elizaOS"
+#define MyAppPublisher "__APP_PUBLISHER__"
 #define MyAppExeName "bin\launcher.exe"
 #define MyDefaultDirName "__DEFAULT_DIR_NAME__"
 #define MyDefaultGroupName "__DEFAULT_GROUP_NAME__"
@@ -16,9 +16,9 @@ AppId={#MyAppId}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-AppPublisherURL=https://app.elizaos.ai
-AppSupportURL=https://github.com/elizaos/elizaos-app/issues
-AppUpdatesURL=https://github.com/elizaos/elizaos-app/releases
+AppPublisherURL=__APP_PUBLISHER_URL__
+AppSupportURL=__APP_SUPPORT_URL__
+AppUpdatesURL=__APP_UPDATES_URL__
 DefaultDirName={#MyDefaultDirName}
 DefaultGroupName={#MyDefaultGroupName}
 DisableProgramGroupPage=yes
