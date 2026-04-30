@@ -45,7 +45,11 @@ try {
   $resolvedBuildDir = $null
 }
 
-$startupLog = Join-Path $env:APPDATA "Milady\\milady-startup.log"
+$startupLogs = @(
+  (Join-Path $env:APPDATA "Milady\\milady-startup.log"),
+  (Join-Path $env:APPDATA "Milady\\eliza-startup.log"),
+  (Join-Path $env:APPDATA "Eliza\\eliza-startup.log")
+) | Select-Object -Unique
 $proofTimestamp = (Get-Date).ToString("o")
 $summaryPath = Join-Path $OutputDir "proof-summary.json"
 $summary = [ordered]@{
@@ -194,8 +198,9 @@ try {
   $summary.notes += "Proof failed: $($_.Exception.Message)"
   throw
 } finally {
-  if (Test-Path $startupLog) {
-    Copy-Item $startupLog -Destination (Join-Path $OutputDir "milady-startup.log") -Force -ErrorAction SilentlyContinue
+  $capturedStartupLog = $startupLogs | Where-Object { Test-Path $_ } | Select-Object -First 1
+  if ($capturedStartupLog) {
+    Copy-Item $capturedStartupLog -Destination (Join-Path $OutputDir (Split-Path $capturedStartupLog -Leaf)) -Force -ErrorAction SilentlyContinue
   }
 
   $summary | ConvertTo-Json -Depth 8 | Set-Content -Path $summaryPath -Encoding utf8

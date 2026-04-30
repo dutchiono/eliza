@@ -53,12 +53,17 @@ if ($env:GITHUB_ENV) {
   Add-Content -Path $env:GITHUB_ENV -Value "MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH=$($env:LOCALAPPDATA)"
   Add-Content -Path $env:GITHUB_ENV -Value "PGLITE_DATA_DIR=$pgliteDataDir"
 }
-# Milady writes its startup log to AppData\Roaming\Milady on Windows, but the
-# release workflow still exports the legacy Eliza paths/env vars for contract
-# compatibility.
+# The packaged app may still use the default startup log file name
+# (eliza-startup.log) even when branded as Milady, so probe both the
+# brand-local and legacy locations.
 $legacyStartupLog = Join-Path $env:APPDATA "Eliza\\eliza-startup.log"
-$startupLog = Join-Path $env:APPDATA "Milady\\milady-startup.log"
-$startupLogs = @($startupLog, $legacyStartupLog) | Select-Object -Unique
+$miladyStartupLog = Join-Path $env:APPDATA "Milady\\milady-startup.log"
+$miladyDefaultStartupLog = Join-Path $env:APPDATA "Milady\\eliza-startup.log"
+$startupLogs = @(
+  $miladyStartupLog,
+  $miladyDefaultStartupLog,
+  $legacyStartupLog
+) | Select-Object -Unique
 $selfExtractionRoot = Join-Path $env:LOCALAPPDATA "com.miladyai.milady"
 $tempExtractDir = Join-Path $tempRoot ("milady-windows-smoke-" + [Guid]::NewGuid().ToString("N"))
 $persistLauncherDir = $env:MILADY_TEST_WINDOWS_LAUNCHER_DIR
