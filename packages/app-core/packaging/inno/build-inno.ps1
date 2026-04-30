@@ -52,9 +52,9 @@ function Get-ChannelLabel {
   param([string]$NormalizedChannel)
 
   switch ($NormalizedChannel) {
-    "stable" { return "elizaOS App" }
-    "canary" { return "elizaOS App Canary" }
-    default { return "elizaOS App $([char]::ToUpper($NormalizedChannel[0]))$($NormalizedChannel.Substring(1))" }
+    "stable" { return "Milady" }
+    "canary" { return "Milady Canary" }
+    default { return "Milady $([char]::ToUpper($NormalizedChannel[0]))$($NormalizedChannel.Substring(1))" }
   }
 }
 
@@ -62,10 +62,10 @@ function Get-ChannelInstallName {
   param([string]$NormalizedChannel)
 
   if ($NormalizedChannel -eq "stable") {
-    return "ElizaOSApp"
+    return "Milady"
   }
 
-  return "ElizaOSApp-$NormalizedChannel"
+  return "Milady-$NormalizedChannel"
 }
 
 function Get-InstallerSignSection {
@@ -150,13 +150,17 @@ New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 $channelInstallName = Get-ChannelInstallName -NormalizedChannel $normalizedChannel
 $appName = Get-ChannelLabel -NormalizedChannel $normalizedChannel
 $appId = if ($normalizedChannel -eq "stable") {
-  "ai.elizaos.app"
+  "com.miladyai.milady"
 } else {
-  "ai.elizaos.app.$normalizedChannel"
+  "com.miladyai.milady.$normalizedChannel"
 }
+$appPublisher = "Milady AI"
+$appPublisherUrl = "https://app.milady.ai"
+$appSupportUrl = "https://github.com/milady-ai/milady/issues"
+$appUpdatesUrl = "https://github.com/milady-ai/milady/releases"
 # Keep install root short to avoid MAX_PATH (Error 206) when extracting deep
 # runtime dependency trees on systems where long paths are not fully enabled.
-$defaultDirName = "{localappdata}\ElizaOSApp\$normalizedChannel"
+$defaultDirName = "{localappdata}\Milady\$normalizedChannel"
 $outputBaseFilename = "ElizaOSApp-Setup-$normalizedChannel"
 
 $signSection = Get-InstallerSignSection
@@ -165,6 +169,10 @@ $generated = $template
 $generated = $generated.Replace("__APP_ID__", (Escape-InnoValue $appId))
 $generated = $generated.Replace("__APP_NAME__", (Escape-InnoValue $appName))
 $generated = $generated.Replace("__APP_VERSION__", (Escape-InnoValue $Version))
+$generated = $generated.Replace("__APP_PUBLISHER__", (Escape-InnoValue $appPublisher))
+$generated = $generated.Replace("__APP_PUBLISHER_URL__", (Escape-InnoValue $appPublisherUrl))
+$generated = $generated.Replace("__APP_SUPPORT_URL__", (Escape-InnoValue $appSupportUrl))
+$generated = $generated.Replace("__APP_UPDATES_URL__", (Escape-InnoValue $appUpdatesUrl))
 $generated = $generated.Replace("__DEFAULT_DIR_NAME__", (Escape-InnoValue $defaultDirName))
 $generated = $generated.Replace("__DEFAULT_GROUP_NAME__", (Escape-InnoValue $appName))
 $generated = $generated.Replace("__OUTPUT_DIR__", (Escape-InnoValue (Resolve-Path $OutputDir).Path))
