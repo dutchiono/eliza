@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { Api, TelegramClient } from "telegram";
-import { StringSession } from "telegram/sessions";
+import { StringSession } from "telegram/sessions/index.js";
 
 export type TelegramAccountAuthStatus =
   | "idle"
