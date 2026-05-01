@@ -21,7 +21,6 @@ import {
   WAKE_CONFIRM_WINDOW_MS,
 } from "./circadian-rules.js";
 import { probeContinuityDevices } from "./continuity-probe.js";
-import { probeIMessageOutboundActivity } from "./imessage-outbound-probe.js";
 import { resolveLifeOpsRelativeTime } from "./relative-time.js";
 import type {
   LifeOpsCircadianStateRow,
@@ -929,10 +928,19 @@ export async function inspectLifeOpsSchedule(args: {
   const nowMs = now.getTime();
   const sinceAt = new Date(nowMs - LOOKBACK_MS).toISOString();
   const untilAt = now.toISOString();
-  await probeIMessageOutboundActivity({
-    repository: args.repository,
-    agentId: args.agentId,
-  });
+  // Only loaded on darwin: imessage-outbound-probe pulls in @elizaos/plugin-imessage,
+  // whose workspace specifier gets rewritten to a dev-only relative path during
+  // packaging. Loading the module on Windows/Linux crashes the agent at startup
+  // even though the probe itself is a no-op off-darwin.
+  if (process.platform === "darwin") {
+    const { probeIMessageOutboundActivity } = await import(
+      "./imessage-outbound-probe.js"
+    );
+    await probeIMessageOutboundActivity({
+      repository: args.repository,
+      agentId: args.agentId,
+    });
+  }
   await probeContinuityDevices({
     repository: args.repository,
     agentId: args.agentId,
