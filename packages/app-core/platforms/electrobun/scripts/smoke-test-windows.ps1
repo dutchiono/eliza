@@ -502,7 +502,7 @@ if (-not $launcher) {
     Write-Host "Inno Setup installer attempt 1 failed with exit code $($installerProcess.ExitCode)."
     if (Test-Path $installerLogPath) {
       Write-Host "--- Inno Setup log (attempt 1) ---"
-      Get-Content $installerLogPath -Tail 100 | ForEach-Object { Write-Host $_ }
+      Get-Content $installerLogPath | ForEach-Object { Write-Host $_ }
       Write-Host "--- end Inno Setup log ---"
     }
 
@@ -521,7 +521,7 @@ if (-not $launcher) {
       Write-Host "Inno Setup installer attempt 2 (cmd /c) failed with exit code $($cmdProcess.ExitCode)."
       if (Test-Path $installerLogPath) {
         Write-Host "--- Inno Setup log (attempt 2) ---"
-        Get-Content $installerLogPath -Tail 100 | ForEach-Object { Write-Host $_ }
+        Get-Content $installerLogPath | ForEach-Object { Write-Host $_ }
         Write-Host "--- end Inno Setup log ---"
       } else {
         Write-Host "Inno Setup log not found at $installerLogPath"
