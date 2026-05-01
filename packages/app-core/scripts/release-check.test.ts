@@ -30,6 +30,73 @@ describe("release-check pack dry-run guard", () => {
   });
 });
 
+describe("Windows installer release contracts", () => {
+  it("keeps the smoke installer root compatible with both env prefixes", () => {
+    const script = readFileSync(
+      new URL(
+        "../platforms/electrobun/scripts/smoke-test-windows.ps1",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+
+    expect(script).toContain("$env:MILADY_TEST_WINDOWS_INSTALL_DIR");
+    expect(script).toContain("$env:ELIZA_TEST_WINDOWS_INSTALL_DIR");
+    expect(script).toContain("milady-installed-");
+    expect(script).not.toContain("milady-windows-installed-");
+  });
+
+  it("keeps Windows smoke diagnostics compatible with both env prefixes", () => {
+    const script = readFileSync(
+      new URL(
+        "../platforms/electrobun/scripts/smoke-test-windows.ps1",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+
+    expect(script).toContain("$env:MILADY_TEST_WINDOWS_APPDATA_PATH");
+    expect(script).toContain("$env:ELIZA_TEST_WINDOWS_APPDATA_PATH");
+    expect(script).toContain("$env:MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH");
+    expect(script).toContain("$env:ELIZA_TEST_WINDOWS_LOCALAPPDATA_PATH");
+    expect(script).toContain("$env:ELIZA_STARTUP_STATE_FILE");
+    expect(script).toContain("$env:ELIZA_STARTUP_EVENTS_FILE");
+    expect(script).toContain(
+      'Add-Content -Path $env:GITHUB_ENV -Value "ELIZA_TEST_WINDOWS_APPDATA_PATH=$($env:APPDATA)"',
+    );
+    expect(script).toContain(
+      'Add-Content -Path $env:GITHUB_ENV -Value "ELIZA_TEST_WINDOWS_LOCALAPPDATA_PATH=$($env:LOCALAPPDATA)"',
+    );
+    expect(script).toContain("[4c/6] Startup logs:");
+    expect(script).toContain("Dump-FailureDiagnostics $BackendPort");
+  });
+
+  it("reads startup trace controls from Milady and legacy env prefixes", () => {
+    const traceSource = readFileSync(
+      new URL("../platforms/electrobun/src/startup-trace.ts", import.meta.url),
+      "utf8",
+    );
+
+    expect(traceSource).toContain("trimEnv(env.ELIZA_STARTUP_SESSION_ID)");
+    expect(traceSource).toContain("trimEnv(env.MILADY_STARTUP_SESSION_ID)");
+    expect(traceSource).toContain("trimEnv(env.ELIZA_STARTUP_STATE_FILE)");
+    expect(traceSource).toContain("trimEnv(env.MILADY_STARTUP_STATE_FILE)");
+    expect(traceSource).toContain("trimEnv(env.ELIZA_STARTUP_EVENTS_FILE)");
+    expect(traceSource).toContain("trimEnv(env.MILADY_STARTUP_EVENTS_FILE)");
+  });
+
+  it("excludes debug and declaration files from the Inno installer payload", () => {
+    const template = readFileSync(
+      new URL("../packaging/inno/ElizaOSApp.iss", import.meta.url),
+      "utf8",
+    );
+
+    expect(template).toContain(
+      'Excludes: "*.d.ts,*.d.cts,*.d.mts,*.d.ts.map,*.d.cts.map,*.d.mts.map,*.js.map,*.cjs.map,*.mjs.map"',
+    );
+  });
+});
+
 describe("release-check cloud-agent template guard", () => {
   it("accepts workspace-local elizaOS dependencies in source", () => {
     expect(

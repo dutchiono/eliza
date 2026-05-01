@@ -44,7 +44,13 @@ Name: "en"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"
 
 [Files]
-Source: "{#MySourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Exclude declaration files and source maps from the installed bundle. They're
+; debug/build-time artifacts the runtime never reads, and they own the longest
+; paths in the bundle (deeply nested @discordjs/ws/node_modules/.../*.d.ts.map),
+; which can collide with Windows' 260-char MAX_PATH limit under Inno Setup 6.
+; Stripping them keeps the installer self-contained while preventing
+; path-overflow rollbacks when the install target is longer than the default.
+Source: "{#MySourceDir}\*"; DestDir: "{app}"; Excludes: "*.d.ts,*.d.cts,*.d.mts,*.d.ts.map,*.d.cts.map,*.d.mts.map,*.js.map,*.cjs.map,*.mjs.map"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#MySetupIconFile}"; DestDir: "{app}"; DestName: "{#MyAppIconFile}"; Flags: ignoreversion
 
 [Icons]

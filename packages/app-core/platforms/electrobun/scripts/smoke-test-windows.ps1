@@ -29,11 +29,15 @@ $tempRoot = if ($env:RUNNER_TEMP) {
 }
 $testAppDataRoot = if ($env:MILADY_TEST_WINDOWS_APPDATA_PATH) {
   $env:MILADY_TEST_WINDOWS_APPDATA_PATH
+} elseif ($env:ELIZA_TEST_WINDOWS_APPDATA_PATH) {
+  $env:ELIZA_TEST_WINDOWS_APPDATA_PATH
 } else {
   Join-Path $tempRoot ("milady-windows-appdata-" + [Guid]::NewGuid().ToString("N"))
 }
 $testLocalAppDataRoot = if ($env:MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH) {
   $env:MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH
+} elseif ($env:ELIZA_TEST_WINDOWS_LOCALAPPDATA_PATH) {
+  $env:ELIZA_TEST_WINDOWS_LOCALAPPDATA_PATH
 } else {
   Join-Path $tempRoot ("milady-windows-localappdata-" + [Guid]::NewGuid().ToString("N"))
 }
@@ -51,6 +55,8 @@ $env:PGLITE_DATA_DIR = $pgliteDataDir
 if ($env:GITHUB_ENV) {
   Add-Content -Path $env:GITHUB_ENV -Value "MILADY_TEST_WINDOWS_APPDATA_PATH=$($env:APPDATA)"
   Add-Content -Path $env:GITHUB_ENV -Value "MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH=$($env:LOCALAPPDATA)"
+  Add-Content -Path $env:GITHUB_ENV -Value "ELIZA_TEST_WINDOWS_APPDATA_PATH=$($env:APPDATA)"
+  Add-Content -Path $env:GITHUB_ENV -Value "ELIZA_TEST_WINDOWS_LOCALAPPDATA_PATH=$($env:LOCALAPPDATA)"
   Add-Content -Path $env:GITHUB_ENV -Value "PGLITE_DATA_DIR=$pgliteDataDir"
 }
 # Milady writes its startup log to AppData\Roaming\Milady on Windows, but the
@@ -369,6 +375,8 @@ $env:ELECTROBUN_CONSOLE = "1"
 $env:MILADY_FORCE_AUTOSTART_AGENT = "1"
 $env:ELIZA_STARTUP_SESSION_ID = $startupSessionId
 $env:MILADY_STARTUP_SESSION_ID = $startupSessionId
+$env:ELIZA_STARTUP_STATE_FILE = $startupStateFile
+$env:ELIZA_STARTUP_EVENTS_FILE = $startupEventsFile
 $env:MILADY_STARTUP_STATE_FILE = $startupStateFile
 $env:MILADY_STARTUP_EVENTS_FILE = $startupEventsFile
 $BackendPort = Resolve-BackendPort $BackendPort
@@ -663,6 +671,18 @@ function Dump-FailureDiagnostics([int]$Port) {
     Write-Host "(startup events file not found)"
   }
 
+  Write-Host ""
+  Write-Host "[4c/6] Startup logs:"
+  foreach ($candidateLog in $startupLogs) {
+    Write-Host "--- $candidateLog ---"
+    if (Test-Path $candidateLog) {
+      Get-Content $candidateLog -Tail 400 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+    } else {
+      Write-Host "(startup log not found)"
+    }
+    Write-Host "--- end $candidateLog ---"
+  }
+
   # 5. Firewall state for port
   Write-Host ""
   Write-Host "[5/6] Firewall rules mentioning port $Port or Bun/Milady:"
@@ -738,6 +758,7 @@ try {
     if ($startupState -and $startupState.phase -eq "fatal") {
       Write-Host "Startup trace entered fatal phase:"
       $startupState | ConvertTo-Json -Depth 6 | Write-Host
+      Dump-FailureDiagnostics $BackendPort
       throw "Windows packaged app reported a fatal startup phase."
     }
 

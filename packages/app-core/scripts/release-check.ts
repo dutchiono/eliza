@@ -171,10 +171,10 @@ const requiredWorkflowSnippets = [
   "ELIZA_ELECTROBUN_NOTARIZE: 0",
   'ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1"',
   'ELIZA_WINDOWS_SMOKE_REQUIRE_INSTALLER: "1"',
-  "ELIZA_TEST_WINDOWS_INSTALL_DIR: $" + "{{ runner.temp }}\\mi",
+  "ELIZA_TEST_WINDOWS_INSTALL_DIR: $" + "{{ runner.temp }}\\el",
   "name: Run Windows clean installer proof",
   "verify-windows-installer-proof.ps1",
-  "ELIZA_TEST_WINDOWS_PROOF_INSTALL_DIR: $" + "{{ runner.temp }}\\mi-proof",
+  "ELIZA_TEST_WINDOWS_PROOF_INSTALL_DIR: $" + "{{ runner.temp }}\\el-proof",
   "name: Upload Windows installer proof artifact",
   "path: apps/app/electrobun/artifacts/windows-installer-proof/**",
   "if: always() && matrix.platform.os == 'windows'",
@@ -990,6 +990,15 @@ function assertWindowsSmokeScriptHasLeadingParamBlock() {
     'Get-ChildItem -Path $resolvedArtifactsDir -File -Filter "*.tar.zst"',
     'Join-Path $env:APPDATA "Eliza\\\\eliza-startup.log"',
     '$requireInstaller = $env:ELIZA_WINDOWS_SMOKE_REQUIRE_INSTALLER -eq "1"',
+    "$env:MILADY_TEST_WINDOWS_INSTALL_DIR",
+    "$env:ELIZA_TEST_WINDOWS_INSTALL_DIR",
+    "$env:MILADY_TEST_WINDOWS_APPDATA_PATH",
+    "$env:ELIZA_TEST_WINDOWS_APPDATA_PATH",
+    "$env:MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH",
+    "$env:ELIZA_TEST_WINDOWS_LOCALAPPDATA_PATH",
+    "$env:ELIZA_STARTUP_STATE_FILE",
+    "$env:ELIZA_STARTUP_EVENTS_FILE",
+    "milady-installed-",
     "Installing via Inno Setup:",
     "/VERYSILENT",
     "installed Inno package",
@@ -1015,6 +1024,8 @@ function assertWindowsSmokeScriptHasLeadingParamBlock() {
     "Cleared stale startup log:",
     "Startup trace entered fatal phase:",
     "Latest startup trace state:",
+    "[4c/6] Startup logs:",
+    "Dump-FailureDiagnostics $BackendPort",
     "-SkipHttpErrorCheck",
     "Dump-PortDiagnostics",
     "Dump-ProcessDiagnostics",
@@ -1103,6 +1114,7 @@ function assertInnoTemplateTargetsBundledLauncher() {
   const requiredSnippets = [
     '#define MyAppExeName "bin\\launcher.exe"',
     '#define MyAppIconFile "ElizaOSApp.ico"',
+    'Excludes: "*.d.ts,*.d.cts,*.d.mts,*.d.ts.map,*.d.cts.map,*.d.mts.map,*.js.map,*.cjs.map,*.mjs.map"',
     'Source: "{#MySetupIconFile}"; DestDir: "{app}"; DestName: "{#MyAppIconFile}"; Flags: ignoreversion',
     "UninstallDisplayIcon={app}\\{#MyAppIconFile}",
     'Name: "{autoprograms}\\{#MyDefaultGroupName}\\{#MyAppName}"; Filename: "{app}\\{#MyAppExeName}"; IconFilename: "{app}\\{#MyAppIconFile}"',
@@ -1126,6 +1138,31 @@ function assertInnoTemplateTargetsBundledLauncher() {
     console.error(
       "release-check: Eliza.iss must not point Windows shortcuts at {app}\\launcher.exe; the bundled launcher lives under bin\\.",
     );
+    process.exit(1);
+  }
+}
+
+function assertStartupTraceReadsMiladyEnvPrefixes() {
+  const source = readElectrobunFile("src", "startup-trace.ts");
+  const requiredSnippets = [
+    "trimEnv(env.ELIZA_STARTUP_SESSION_ID)",
+    "trimEnv(env.MILADY_STARTUP_SESSION_ID)",
+    "trimEnv(env.ELIZA_STARTUP_STATE_FILE)",
+    "trimEnv(env.MILADY_STARTUP_STATE_FILE)",
+    "trimEnv(env.ELIZA_STARTUP_EVENTS_FILE)",
+    "trimEnv(env.MILADY_STARTUP_EVENTS_FILE)",
+  ];
+  const missingSnippets = requiredSnippets.filter(
+    (snippet) => !source.includes(snippet),
+  );
+
+  if (missingSnippets.length > 0) {
+    console.error(
+      "release-check: startup trace must accept both Milady and legacy env prefixes.",
+    );
+    for (const snippet of missingSnippets) {
+      console.error(`  - ${snippet}`);
+    }
     process.exit(1);
   }
 }
@@ -1317,6 +1354,7 @@ function main() {
   assertWindowsInstallerProofScript();
   assertInnoBuildScriptHasTimeoutAndHeartbeat();
   assertInnoTemplateTargetsBundledLauncher();
+  assertStartupTraceReadsMiladyEnvPrefixes();
   assertMacSmokeScriptLaunchesPackagedLauncherDirectly();
   assertServerDynamicHyperscapeImport();
   assertStartApiServerCatchBlockSafety();
