@@ -23,13 +23,13 @@ const EXPERIENCE_TYPES = [
   "hypothesis",
   "validation",
   "warning",
-] as const satisfies readonly ExperienceType[];
+] as const;
 const OUTCOME_TYPES = [
   "positive",
   "negative",
   "neutral",
   "mixed",
-] as const satisfies readonly OutcomeType[];
+] as const;
 
 type ExperienceMutationBody = Record<string, unknown>;
 
@@ -210,7 +210,7 @@ function parseExperienceMutationBody(
   const type = parseEnumValue(body.type, EXPERIENCE_TYPES, "type");
   if (type.error) return { error: type.error };
   if (type.value !== undefined) {
-    parsed.type = type.value;
+    parsed.type = type.value as ExperienceType;
   }
 
   const outcome = parseEnumValue(
@@ -220,7 +220,7 @@ function parseExperienceMutationBody(
   );
   if (outcome.error) return { error: outcome.error };
   if (outcome.value !== undefined) {
-    parsed.outcome = outcome.value;
+    parsed.outcome = outcome.value as OutcomeType;
   }
 
   const context = parseStringField(body.context, "context");
