@@ -862,7 +862,7 @@ try {
     }
 
     if (
-      Test-StartupTraceReady $startupState -and
+      (Test-StartupTraceReady $startupState) -and
       -not $healthy
     ) {
       Write-Host "Startup trace reached $($startupState.phase) but /api/health has not responded yet."
