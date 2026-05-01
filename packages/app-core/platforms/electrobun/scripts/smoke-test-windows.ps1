@@ -406,8 +406,13 @@ if (-not $requireInstaller) {
 }
 $installerRoot = if ($env:MILADY_TEST_WINDOWS_INSTALL_DIR) {
   $env:MILADY_TEST_WINDOWS_INSTALL_DIR
+} elseif ($env:ELIZA_TEST_WINDOWS_INSTALL_DIR) {
+  # The release workflow exports ELIZA_TEST_WINDOWS_INSTALL_DIR for legacy
+  # contract compatibility — accept either prefix so a short, MAX_PATH-safe
+  # install dir actually flows through to the Inno /DIR override on CI.
+  $env:ELIZA_TEST_WINDOWS_INSTALL_DIR
 } else {
-  Join-Path $tempRoot ("milady-windows-installed-" + [Guid]::NewGuid().ToString("N"))
+  Join-Path $tempRoot ("milady-installed-" + [Guid]::NewGuid().ToString("N").Substring(0, 8))
 }
 if ($requireInstaller) {
   $launcher = $null
