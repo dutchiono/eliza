@@ -123,7 +123,7 @@ declare module "telegram" {
     [key: string]: unknown;
   };
 }
-declare module "telegram/sessions" {
+declare module "telegram/sessions/index.js" {
   export class StringSession {
     constructor(sessionString?: string);
     save(): string;
