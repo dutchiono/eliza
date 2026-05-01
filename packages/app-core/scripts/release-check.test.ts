@@ -77,6 +77,9 @@ describe("Windows installer release contracts", () => {
     expect(script).toContain("$env:ELIZA_STARTUP_STATE_FILE");
     expect(script).toContain("$env:ELIZA_STARTUP_EVENTS_FILE");
     expect(script).toContain(
+      'Join-Path $env:APPDATA "Milady\\\\eliza-startup.log"',
+    );
+    expect(script).toContain(
       'Add-Content -Path $env:GITHUB_ENV -Value "ELIZA_TEST_WINDOWS_APPDATA_PATH=$($env:APPDATA)"',
     );
     expect(script).toContain(

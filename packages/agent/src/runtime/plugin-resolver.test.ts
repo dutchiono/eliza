@@ -158,22 +158,21 @@ describe("importPluginModuleFromPath", () => {
           name: "@elizaos/app-sample",
           version: "0.0.0",
           type: "module",
-          main: "./src/ui-entry.ts",
+          main: "./src/ui-entry.js",
           exports: {
-            ".": "./src/ui-entry.ts",
-            "./plugin": "./src/index.ts",
+            ".": "./src/ui-entry.js",
+            "./plugin": "./src/index.js",
           },
           peerDependencies: { react: "*" },
         }),
       );
       await fs.writeFile(
-        path.join(appRoot, "src", "ui-entry.ts"),
+        path.join(appRoot, "src", "ui-entry.js"),
         'throw new Error("UI entry should not be imported for runtime plugin loading");\n',
       );
       await fs.writeFile(
-        path.join(appRoot, "src", "index.ts"),
+        path.join(appRoot, "src", "index.js"),
         [
-          'import { jsx } from "react/jsx-dev-runtime";',
           "export const appSamplePlugin = {",
           '  name: "app-sample",',
           "  actions: [],",
@@ -182,7 +181,7 @@ describe("importPluginModuleFromPath", () => {
           "  services: [],",
           "  routes: [],",
           "};",
-          "export const marker = jsx;",
+          'export const marker = "plugin-entry";',
         ].join("\n"),
       );
 
@@ -208,6 +207,84 @@ describe("importPluginModuleFromPath", () => {
           path.join(stagingBaseDir, stagedDir, "root", "node_modules", "react"),
         ),
       ).resolves.toBeDefined();
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true }).catch(() => {
+        /* ignore cleanup failures */
+      });
+    }
+  });
+
+  it("falls back to ancestor dependencies when package-local symlinks are broken", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "eliza-plugin-broken-link-workspace-"),
+    );
+    try {
+      const pluginRoot = path.join(
+        workspaceRoot,
+        "plugins",
+        "plugin-broken-link",
+      );
+      const dependencyRoot = path.join(
+        workspaceRoot,
+        "node_modules",
+        "dep-from-ancestor",
+      );
+      await fs.mkdir(path.join(pluginRoot, "node_modules"), {
+        recursive: true,
+      });
+      await fs.mkdir(dependencyRoot, { recursive: true });
+
+      await fs.writeFile(
+        path.join(dependencyRoot, "package.json"),
+        JSON.stringify({
+          name: "dep-from-ancestor",
+          version: "0.0.0",
+          type: "module",
+          exports: "./index.js",
+        }),
+      );
+      await fs.writeFile(
+        path.join(dependencyRoot, "index.js"),
+        'export const marker = "ancestor";\n',
+      );
+      await fs.writeFile(
+        path.join(pluginRoot, "package.json"),
+        JSON.stringify({
+          name: "@elizaos/plugin-broken-link",
+          version: "0.0.0",
+          type: "module",
+          main: "./index.js",
+          exports: "./index.js",
+          dependencies: { "dep-from-ancestor": "0.0.0" },
+        }),
+      );
+      await fs.writeFile(
+        path.join(pluginRoot, "index.js"),
+        [
+          'import { marker } from "dep-from-ancestor";',
+          "export const brokenLinkPlugin = {",
+          '  name: `broken-link-${marker}`,',
+          "  actions: [],",
+          "  providers: [],",
+          "  evaluators: [],",
+          "  services: [],",
+          "  routes: [],",
+          "};",
+        ].join("\n"),
+      );
+      await fs.symlink(
+        path.join(workspaceRoot, "node_modules", ".bun", "missing"),
+        path.join(pluginRoot, "node_modules", "dep-from-ancestor"),
+        "dir",
+      );
+
+      const pluginModule = await importPluginModuleFromPath(
+        pluginRoot,
+        "@elizaos/plugin-broken-link",
+      );
+      expect(pluginModule.brokenLinkPlugin?.name).toBe(
+        "broken-link-ancestor",
+      );
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true }).catch(() => {
         /* ignore cleanup failures */

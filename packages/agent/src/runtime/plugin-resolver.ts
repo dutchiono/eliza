@@ -135,6 +135,36 @@ async function pathEntryExists(targetPath: string): Promise<boolean> {
   }
 }
 
+async function realpathOrNull(targetPath: string): Promise<string | null> {
+  try {
+    return await fs.realpath(targetPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function usablePackageEntryExists(targetPath: string): Promise<boolean> {
+  try {
+    const stat = await fs.lstat(targetPath);
+    if (!stat.isSymbolicLink()) {
+      return true;
+    }
+    if (await realpathOrNull(targetPath)) {
+      return true;
+    }
+    await fs.rm(targetPath, { force: true });
+    return false;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return false;
+    }
+    throw error;
+  }
+}
+
 async function readPluginPackageManifest(
   packageRoot: string,
 ): Promise<PluginPackageManifest | null> {
@@ -196,14 +226,18 @@ async function stageDependencyIntoNodeModules(params: {
     params.targetNodeModulesDir,
     params.dependencyName,
   );
-  if (await pathEntryExists(targetPath)) {
+  if (await usablePackageEntryExists(targetPath)) {
     return true;
   }
 
   await fs.mkdir(path.dirname(targetPath), { recursive: true });
   const stat = await fs.lstat(sourcePath);
   if (stat.isSymbolicLink()) {
-    await fs.symlink(await fs.realpath(sourcePath), targetPath);
+    const realSourcePath = await realpathOrNull(sourcePath);
+    if (!realSourcePath) {
+      return false;
+    }
+    await fs.symlink(realSourcePath, targetPath);
     return true;
   }
   if (!stat.isDirectory()) {
@@ -228,10 +262,6 @@ async function ensureStagedPackageDependencies(params: {
     params.stagedPackageRoot,
     "node_modules",
   );
-  if (!(await pathEntryExists(stagedNodeModulesPath))) {
-    return;
-  }
-
   const manifest = await readPluginPackageManifest(params.packageRoot);
   if (!manifest) {
     return;
@@ -241,6 +271,8 @@ async function ensureStagedPackageDependencies(params: {
   if (dependencies.length === 0) {
     return;
   }
+
+  await fs.mkdir(stagedNodeModulesPath, { recursive: true });
 
   const sourceNodeModulesDirs = uniquePaths([
     path.join(params.packageRoot, "node_modules"),
@@ -253,7 +285,7 @@ async function ensureStagedPackageDependencies(params: {
       stagedNodeModulesPath,
       dependency.name,
     );
-    if (await pathEntryExists(stagedDependencyPath)) {
+    if (await usablePackageEntryExists(stagedDependencyPath)) {
       continue;
     }
 
@@ -690,10 +722,11 @@ async function stageNodeModulesEntries(params: {
           continue;
         }
         if (scopedEntry.isSymbolicLink()) {
-          await fs.symlink(
-            await fs.realpath(scopedSourcePath),
-            scopedTargetPath,
-          );
+          const realSourcePath = await realpathOrNull(scopedSourcePath);
+          if (!realSourcePath) {
+            continue;
+          }
+          await fs.symlink(realSourcePath, scopedTargetPath);
           continue;
         }
         if (!scopedEntry.isDirectory()) {
@@ -712,7 +745,11 @@ async function stageNodeModulesEntries(params: {
       continue;
     }
     if (entry.isSymbolicLink()) {
-      await fs.symlink(await fs.realpath(sourcePath), targetPath);
+      const realSourcePath = await realpathOrNull(sourcePath);
+      if (!realSourcePath) {
+        continue;
+      }
+      await fs.symlink(realSourcePath, targetPath);
       continue;
     }
     if (!entry.isDirectory()) {

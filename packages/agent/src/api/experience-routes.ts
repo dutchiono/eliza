@@ -1,8 +1,8 @@
 import type { AgentRuntime, UUID } from "@elizaos/core";
 import type { ExperienceService } from "../../../typescript/src/features/advanced-capabilities/experience/service.ts";
-import {
-  type Experience,
-  type ExperienceQuery,
+import type {
+  Experience,
+  ExperienceQuery,
   ExperienceType,
   OutcomeType,
 } from "../../../typescript/src/features/advanced-capabilities/experience/types.ts";
@@ -14,6 +14,22 @@ const EXPERIENCE_ROUTE_PREFIXES = [
 ] as const;
 const EXPERIENCE_LIST_DEFAULT_LIMIT = 100;
 const EXPERIENCE_LIST_MAX_LIMIT = 200;
+const EXPERIENCE_TYPES = [
+  "success",
+  "failure",
+  "discovery",
+  "correction",
+  "learning",
+  "hypothesis",
+  "validation",
+  "warning",
+] as const satisfies readonly ExperienceType[];
+const OUTCOME_TYPES = [
+  "positive",
+  "negative",
+  "neutral",
+  "mixed",
+] as const satisfies readonly OutcomeType[];
 
 type ExperienceMutationBody = Record<string, unknown>;
 
@@ -191,7 +207,7 @@ function parseExperienceMutationBody(
 ): { data?: ExperienceMutationInput; error?: string } {
   const parsed: ExperienceMutationInput = {};
 
-  const type = parseEnumValue(body.type, Object.values(ExperienceType), "type");
+  const type = parseEnumValue(body.type, EXPERIENCE_TYPES, "type");
   if (type.error) return { error: type.error };
   if (type.value !== undefined) {
     parsed.type = type.value;
@@ -199,7 +215,7 @@ function parseExperienceMutationBody(
 
   const outcome = parseEnumValue(
     body.outcome,
-    Object.values(OutcomeType),
+    OUTCOME_TYPES,
     "outcome",
   );
   if (outcome.error) return { error: outcome.error };
@@ -370,21 +386,21 @@ function parseExperienceQuery(url: URL): {
 
   const type = parseCsvSearchParams(url, "type");
   const invalidType = type?.find(
-    (value) => !Object.values(ExperienceType).includes(value as ExperienceType),
+    (value) => !EXPERIENCE_TYPES.includes(value as ExperienceType),
   );
   if (invalidType) {
     return {
-      error: `type must be one of: ${Object.values(ExperienceType).join(", ")}.`,
+      error: `type must be one of: ${EXPERIENCE_TYPES.join(", ")}.`,
     };
   }
 
   const outcome = parseCsvSearchParams(url, "outcome");
   const invalidOutcome = outcome?.find(
-    (value) => !Object.values(OutcomeType).includes(value as OutcomeType),
+    (value) => !OUTCOME_TYPES.includes(value as OutcomeType),
   );
   if (invalidOutcome) {
     return {
-      error: `outcome must be one of: ${Object.values(OutcomeType).join(", ")}.`,
+      error: `outcome must be one of: ${OUTCOME_TYPES.join(", ")}.`,
     };
   }
 

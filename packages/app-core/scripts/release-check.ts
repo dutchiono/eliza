@@ -989,6 +989,8 @@ function assertWindowsSmokeScriptHasLeadingParamBlock() {
     "Find-Launcher $resolvedBuildDir",
     'Get-ChildItem -Path $resolvedArtifactsDir -File -Filter "*.tar.zst"',
     'Join-Path $env:APPDATA "Eliza\\\\eliza-startup.log"',
+    'Join-Path $env:APPDATA "elizaOS\\\\eliza-startup.log"',
+    'Join-Path $env:APPDATA "Milady\\\\eliza-startup.log"',
     '$requireInstaller = $env:ELIZA_WINDOWS_SMOKE_REQUIRE_INSTALLER -eq "1"',
     "$env:MILADY_TEST_WINDOWS_INSTALL_DIR",
     "$env:ELIZA_TEST_WINDOWS_INSTALL_DIR",

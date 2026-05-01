@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import type http from "node:http";
 import type { AgentRuntime, UUID } from "@elizaos/core";
 import { describe, expect, it, vi } from "vitest";
@@ -86,6 +87,18 @@ function makeContext(options: {
 }
 
 describe("handleExperienceRoutes", () => {
+  it("keeps cross-package experience imports type-only for packaged runtime", () => {
+    const source = readFileSync(
+      new URL("./experience-routes.ts", import.meta.url),
+      "utf8",
+    );
+
+    expect(source).toContain("import type {");
+    expect(source).not.toMatch(
+      /import\s*\{[\s\S]*ExperienceType[\s\S]*\}\s*from\s*["']\.\.\/\.\.\/\.\.\/typescript\/src\/features\/advanced-capabilities\/experience\/types\.ts["']/,
+    );
+  });
+
   it("lists experiences through /api/experiences with parsed query filters", async () => {
     const listExperiences = vi.fn(async () => [makeExperience("exp-001")]);
     const { ctx, recorded } = makeContext({
