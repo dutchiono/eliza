@@ -12,11 +12,22 @@ if (!version) {
   process.exit(1);
 }
 
-for (const file of [
+// electrobun config lives at packages/app-core/platforms/electrobun/ inside
+// eliza now; keep the legacy apps/app/electrobun/ paths in the candidate list
+// for repos that haven't migrated yet.
+const electrobunDirs = [
+  "eliza/packages/app-core/platforms/electrobun",
+  "packages/app-core/platforms/electrobun",
+  "apps/app/electrobun",
+];
+
+const packageJsonCandidates = [
   "package.json",
   "apps/app/package.json",
-  "apps/app/electrobun/package.json",
-]) {
+  ...electrobunDirs.map((dir) => `${dir}/package.json`),
+];
+
+for (const file of packageJsonCandidates) {
   try {
     const pkg = JSON.parse(fs.readFileSync(file, "utf8"));
     pkg.version = version;
@@ -26,7 +37,15 @@ for (const file of [
   }
 }
 
-const cfgPath = "apps/app/electrobun/electrobun.config.ts";
+const cfgPath = electrobunDirs
+  .map((dir) => `${dir}/electrobun.config.ts`)
+  .find((candidate) => fs.existsSync(candidate));
+if (!cfgPath) {
+  console.error(
+    `electrobun.config.ts not found in any candidate location: ${electrobunDirs.join(", ")}`,
+  );
+  process.exit(1);
+}
 let cfg = fs.readFileSync(cfgPath, "utf8");
 cfg = cfg.replace(/version:\s*"[^"]+"/, `version: "${version}"`);
 fs.writeFileSync(cfgPath, cfg);
