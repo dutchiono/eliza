@@ -486,12 +486,17 @@ if (-not $launcher) {
   New-Item -ItemType Directory -Force -Path $installerRoot | Out-Null
 
   $installerLogPath = Join-Path $tempRoot "milady-inno-setup.log"
+  # NOTE: /CLOSEAPPLICATIONS removed. The .iss template ships with
+  # CloseApplications=no, but passing the cmdline flag overrode that to yes
+  # and activated RestartManager — which on Windows Server runners
+  # interacts badly with Defender real-time scanning and reliably exits
+  # with code 5 ("install cancelled during file copy") on a clean runner
+  # where there should be no in-use files at all.
   $installerArgs = @(
     "/VERYSILENT",
     "/SUPPRESSMSGBOXES",
     "/NORESTART",
     "/SP-",
-    "/CLOSEAPPLICATIONS",
     "/DIR=$installerRoot",
     "/LOG=$installerLogPath"
   )
