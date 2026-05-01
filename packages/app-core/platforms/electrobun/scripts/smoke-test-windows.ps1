@@ -512,6 +512,11 @@ if (-not $launcher) {
     Write-Host "Retrying installer via cmd /c (headless fallback)..."
     Remove-Item $installerRoot -Recurse -Force -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Force -Path $installerRoot | Out-Null
+    # Preserve the attempt-1 Inno log under a sibling name so it survives
+    # the second attempt (and the diagnostic upload) for post-mortem.
+    if (Test-Path $installerLogPath) {
+      Copy-Item $installerLogPath ($installerLogPath + ".attempt1") -Force -ErrorAction SilentlyContinue
+    }
     Remove-Item $installerLogPath -Force -ErrorAction SilentlyContinue
 
     $cmdArgs = @($installerArgs | ForEach-Object { "`"$_`"" }) -join " "
