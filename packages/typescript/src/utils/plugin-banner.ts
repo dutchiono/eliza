@@ -11,10 +11,10 @@ import type { IAgentRuntime } from "../types/runtime";
 
 // Note: regex captures ANSI codes for consistent banner formatting across plugins.
 
-// Pattern for matching ANSI escape sequences
+// Pattern for matching ANSI escape sequences (RegExp constructor avoids control-char-in-regex lint)
+const ANSI_ESC = "\x1b";
 function newAnsiPattern() {
-	// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI codes require ESC
-	return /\x1b\[[0-9;]*m/g;
+	return new RegExp(`${ANSI_ESC}\\[[0-9;]*m`, "g");
 }
 
 export type BannerColors = {
@@ -63,8 +63,7 @@ const DEFAULT_COLORS: BannerColors = {
 };
 
 export function stripAnsi(text: string): string {
-	// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI codes require ESC
-	return text.replace(/\x1b\[[0-9;]*m/g, "");
+	return text.replace(new RegExp(`${ANSI_ESC}\\[[0-9;]*m`, "g"), "");
 }
 
 /**
@@ -175,7 +174,11 @@ export function sliceByWidth(text: string, maxWidth: number): string {
 			continue;
 		}
 
-		for (const { segment } of segmenter.segment(remaining)) {
+		// Extract text before any ANSI code to avoid segmenting ANSI sequences
+		const nextAnsiIndex = ansiMatch ? ansiMatch.index : remaining.length;
+		const textSegment = remaining.slice(0, nextAnsiIndex);
+
+		for (const { segment } of segmenter.segment(textSegment)) {
 			const graphemeCols = graphemeWidth(segment);
 			if (width + graphemeCols > maxWidth) break;
 

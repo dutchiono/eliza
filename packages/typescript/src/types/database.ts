@@ -710,25 +710,23 @@ export interface IDatabaseAdapter<DB extends object = object> {
 	 * Get memories matching criteria
 	 *
 	 * WHY metadata parameter: Eliminates the "fetch 50K rows, filter in JS" antipattern
-	 * seen in plugin-knowledge. Database-level JSON filtering is 50-100x faster:
+	 * seen in the legacy knowledge implementation. Database-level JSON filtering is 50-100x faster:
 	 * - PostgreSQL: Uses GIN-indexed @> operator on jsonb columns
 	 * - MySQL: Uses JSON_CONTAINS() function
 	 * - InMemory: Deep equality check (less efficient but correct)
 	 *
 	 * WHY limit/offset: Standard pagination naming (limit = max results, offset = skip N).
-	 * The deprecated 'count' parameter is kept for backward compatibility.
 	 *
 	 * @param params.metadata Filter by metadata fields (partial object match)
-	 * @param params.limit Max results to return (replaces deprecated 'count')
+	 * @param params.limit Max results to return
 	 * @param params.offset Skip first N results for pagination
 	 * @param params.tableName Memory type/table (required)
 	 */
 	getMemories(params: {
 		entityId?: UUID;
 		agentId?: UUID;
-		/** @deprecated use limit */
-		count?: number;
 		limit?: number;
+		count?: number;
 		offset?: number;
 		unique?: boolean;
 		tableName: string;
@@ -769,8 +767,6 @@ export interface IDatabaseAdapter<DB extends object = object> {
 		entityId?: UUID;
 		roomId?: UUID;
 		type?: string;
-		/** @deprecated use limit */
-		count?: number;
 		limit?: number;
 		offset?: number;
 	}): Promise<Log[]>;
@@ -829,8 +825,6 @@ export interface IDatabaseAdapter<DB extends object = object> {
 	searchMemories(params: {
 		embedding: number[];
 		match_threshold?: number;
-		/** @deprecated use limit */
-		count?: number;
 		limit?: number;
 		unique?: boolean;
 		tableName: string;
@@ -933,7 +927,7 @@ export interface IDatabaseAdapter<DB extends object = object> {
 	 * Upsert worlds (insert or update by ID)
 	 *
 	 * WHY: Atomic insert-or-update for world initialization. Worlds are created
-	 * during agent bootstrap or plugin initialization. Concurrent initialization
+	 * during agent basic-capabilities or plugin initialization. Concurrent initialization
 	 * attempts should be idempotent, not fail with "already exists" errors.
 	 *
 	 * WHY on adapter interface: SQL dialects support atomic upserts for worlds.
@@ -1151,8 +1145,6 @@ export interface IDatabaseAdapter<DB extends object = object> {
 
 	getMemoriesByWorldId(params: {
 		worldIds?: UUID[];
-		/** @deprecated use limit */
-		count?: number;
 		limit?: number;
 		tableName?: string;
 	}): Promise<Memory[]>;

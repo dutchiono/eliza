@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { ACTION_BENCHMARK_CASES } from "../../../app-core/test/benchmarks/action-selection-cases.ts";
 import {
 	composeActionExamples,
 	formatActionNames,
 	formatActions,
+	parseActionParams,
+	validateActionParams,
 } from "../actions";
+import { allActionDocs } from "../generated/action-docs";
 import type { Action } from "../types";
 
 describe("Actions", () => {
@@ -84,6 +88,12 @@ describe("Actions", () => {
 	];
 
 	describe("composeActionExamples", () => {
+		it("should be deterministic for the same seed", () => {
+			const first = composeActionExamples(mockActions, 2, "room-seed");
+			const second = composeActionExamples(mockActions, 2, "room-seed");
+			expect(first).toBe(second);
+		});
+
 		it("should generate examples with correct format", () => {
 			const examples = composeActionExamples(mockActions, 1);
 			const lines = examples.trim().split("\n");
@@ -151,6 +161,18 @@ describe("Actions", () => {
 	});
 
 	describe("formatActionNames", () => {
+		it("should keep action ordering deterministic for the same seed", () => {
+			const first = formatActionNames(
+				[mockActions[0], mockActions[1], mockActions[2]],
+				"room-seed",
+			);
+			const second = formatActionNames(
+				[mockActions[0], mockActions[1], mockActions[2]],
+				"room-seed",
+			);
+			expect(first).toBe(second);
+		});
+
 		it("should format action names correctly", () => {
 			const formatted = formatActionNames([mockActions[0], mockActions[1]]);
 			expect(formatted).toMatch(/^(greet|farewell)(, (greet|farewell))?$/);
@@ -170,7 +192,10 @@ describe("Actions", () => {
 	describe("formatActions", () => {
 		it("should format actions with descriptions", () => {
 			const formatted = formatActions([mockActions[0]]);
-			expect(formatted).toBe("- **greet**: Greet someone");
+			expect(formatted).toContain("actions[1]:");
+			expect(formatted).toContain("- greet:");
+			expect(formatted).toContain("Greet someone");
+			expect(formatted).toContain("aliases[2]: say hi, welcome");
 		});
 
 		it("should include parameter definitions and examples when present", () => {
@@ -198,28 +223,279 @@ describe("Actions", () => {
 				},
 			]);
 
-			expect(formatted).toContain("- **MOVE**: Move the agent.");
-			expect(formatted).toContain("Parameters:");
-			expect(formatted).toContain("direction (required)");
-			expect(formatted).toContain("[examples:");
-			expect(formatted).toContain('"north"');
+			expect(formatted).toContain("- MOVE: Move the agent.");
+			expect(formatted).toContain("params[1]:");
+			expect(formatted).toContain("direction:string");
+			expect(formatted).toContain("values=north|south");
+			expect(formatted).toContain('examples="north"|"south"');
+		});
+
+		it("includes action-tagged example hints when available", () => {
+			const formatted = formatActions([
+				{
+					name: "LIFE",
+					description: "Manage habits.",
+					examples: [
+						[
+							{
+								name: "name1",
+								content: {
+									text: "help me brush my teeth at 8 am and 9 pm every day",
+								},
+							},
+							{
+								name: "name2",
+								content: {
+									text: 'I can set up a habit named "Brush teeth".',
+									actions: ["LIFE"],
+								},
+							},
+						],
+					],
+					similes: [],
+					handler: async () => {
+						throw new Error("Not implemented");
+					},
+					validate: async () => {
+						throw new Error("Not implemented");
+					},
+				},
+			]);
+
+			expect(formatted).toContain(
+				'example: User: "help me brush my teeth at 8 am and 9 pm every day" -> actions: LIFE',
+			);
+		});
+
+		it("deduplicates and trims aliases before rendering them", () => {
+			const formatted = formatActions([
+				{
+					name: "FOLLOW_UP",
+					description: "Schedule a follow-up.",
+					examples: [],
+					similes: ["  ping back  ", "ping back", "", "check in"],
+					handler: async () => {
+						throw new Error("Not implemented");
+					},
+					validate: async () => {
+						throw new Error("Not implemented");
+					},
+				},
+			]);
+
+			expect(formatted).toContain("aliases[2]: ping back, check in");
+			expect(formatted).not.toContain("aliases[4]");
 		});
 
 		it("should include commas and newlines between multiple actions", () => {
 			const formatted = formatActions([mockActions[0], mockActions[1]]);
-			const parts = formatted.split("\n");
-			expect(parts.length).toBe(2);
-			expect(parts[0]).toMatch(/^- \*\*(greet|farewell)\*\*: /);
-			expect(parts[1]).toMatch(/^- \*\*(greet|farewell)\*\*: /);
+			expect(formatted).toContain("actions[2]:");
+			expect(formatted).toContain("greet");
+			expect(formatted).toContain("farewell");
 		});
 
 		it("should handle empty actions array", () => {
 			const formatted = formatActions([]);
 			expect(formatted).toBe("");
 		});
+
+		// Production observation (2026-04-28): a plugin's action shipped with
+		// `tags: [undefined, "foo"]` (a malformed entry from elsewhere in the
+		// runtime). When the planner-prompt builder formatted that action, the
+		// `(action.tags ?? []).map((tag) => tag.trim())` chain crashed with
+		// "undefined is not an object (evaluating 'tag.trim')". plugin-discord
+		// caught that exception as "Error handling message" and the bot
+		// silently dropped the user's message — no reply, no log line about
+		// the cause beyond the bare error message.
+		//
+		// formatActions must be defensive against non-string entries in
+		// action.tags / action.similes since Action consumers don't always
+		// validate their own arrays.
+		it("skips non-string entries in action.tags without throwing", () => {
+			const formatted = formatActions([
+				{
+					name: "WIDGET",
+					description: "Do widget things.",
+					examples: [],
+					similes: [],
+					tags: [
+						undefined as unknown as string,
+						null as unknown as string,
+						"  alpha  ",
+						42 as unknown as string,
+						"beta",
+					],
+					handler: async () => {
+						throw new Error("Not implemented");
+					},
+					validate: async () => {
+						throw new Error("Not implemented");
+					},
+				},
+			]);
+
+			expect(formatted).toContain("- WIDGET:");
+			expect(formatted).toContain("tags[2]: alpha, beta");
+		});
+
+		it("skips non-string entries in action.similes without throwing", () => {
+			const formatted = formatActions([
+				{
+					name: "GREET",
+					description: "Say hi.",
+					examples: [],
+					similes: [
+						undefined as unknown as string,
+						null as unknown as string,
+						"  hi  ",
+						"hello",
+					],
+					handler: async () => {
+						throw new Error("Not implemented");
+					},
+					validate: async () => {
+						throw new Error("Not implemented");
+					},
+				},
+			]);
+
+			expect(formatted).toContain("- GREET:");
+			expect(formatted).toContain("aliases[2]: hi, hello");
+		});
+	});
+
+	describe("Action benchmark cases", () => {
+		it("keeps structurally tricky routing cases single-turn and supported", () => {
+			const casesById = new Map(
+				ACTION_BENCHMARK_CASES.map((testCase) => [testCase.id, testCase]),
+			);
+
+			expect(casesById.has("cross-send-slack")).toBe(false);
+			expect(casesById.get("cross-send-signal")).toMatchObject({
+				expectedAction: "OWNER_SEND_MESSAGE",
+				userMessage:
+					"send a Signal message to Priya saying thanks for the review",
+			});
+
+			expect(casesById.has("computer-use-fill-form")).toBe(false);
+			expect(casesById.get("computer-use-screenshot")).toMatchObject({
+				expectedAction: "LIFEOPS_COMPUTER_USE",
+				userMessage: "take a screenshot of my desktop",
+			});
+
+			expect(casesById.has("intent-sync-send-to-mobile")).toBe(false);
+			expect(
+				casesById.get("intent-sync-mobile-routine-reminder"),
+			).toMatchObject({
+				expectedAction: "INTENT_SYNC",
+				expectedParams: {
+					subaction: "broadcast",
+					kind: "routine_reminder",
+					target: "mobile",
+					title: "Stretch break",
+					body: "Get up and stretch for five minutes",
+				},
+			});
+
+			expect(casesById.has("calendly-list-slots")).toBe(false);
+			expect(casesById.get("calendly-check-availability")).toMatchObject({
+				expectedAction: "OWNER_CALENDAR",
+				expectedParams: {
+					subaction: "availability",
+					eventTypeUri: "https://api.calendly.com/event_types/abc",
+					startDate: "2026-04-20",
+					endDate: "2026-04-24",
+				},
+			});
+			expect(casesById.get("calendly-create-single-use-link")).toMatchObject({
+				expectedAction: "OWNER_CALENDAR",
+				expectedParams: {
+					subaction: "single_use_link",
+					eventTypeUri: "https://api.calendly.com/event_types/abc",
+				},
+			});
+		});
+	});
+
+	describe("parseActionParams", () => {
+		it("parses JSON payloads inside legacy flat action wrappers", () => {
+			const params = parseActionParams(
+				'<LIFE>{"action":"create","intent":"create a habit to brush teeth at 8am and 9pm daily","title":"Brush Teeth"}</LIFE>',
+			);
+
+			expect(params.get("LIFE")).toEqual({
+				action: "create",
+				intent: "create a habit to brush teeth at 8am and 9pm daily",
+				title: "Brush Teeth",
+			});
+		});
+	});
+
+	describe("validateActionParams", () => {
+		it("coerces comma-separated strings into string arrays for array params", () => {
+			const action: Action = {
+				name: "BLOCK_WEBSITES",
+				description: "Block websites.",
+				parameters: [
+					{
+						name: "websites",
+						description: "Website hostnames to block.",
+						required: true,
+						schema: {
+							type: "array",
+							items: { type: "string" },
+						},
+					},
+				],
+				examples: [],
+				similes: [],
+				handler: async () => {
+					throw new Error("Not implemented");
+				},
+				validate: async () => {
+					throw new Error("Not implemented");
+				},
+			};
+
+			expect(
+				validateActionParams(action, {
+					websites: "x.com, twitter.com",
+				}),
+			).toEqual({
+				valid: true,
+				params: {
+					websites: ["x.com", "twitter.com"],
+				},
+				errors: [],
+			});
+		});
 	});
 
 	describe("Action Structure", () => {
+		it("keeps REPLY scoped to chat replies in the current conversation", () => {
+			const replyDoc = allActionDocs.find((doc) => doc.name === "REPLY");
+			expect(replyDoc).toBeDefined();
+			expect(replyDoc?.description).toContain(
+				"direct chat reply in the current conversation/thread",
+			);
+			expect(replyDoc?.description).toContain(
+				"not an email reply, inbox workflow, or external-channel send",
+			);
+			expect(replyDoc?.similes ?? []).not.toContain("REPLY_TO_MESSAGE");
+			expect(replyDoc?.similes ?? []).not.toContain("SEND_REPLY");
+		});
+
+		it("keeps IGNORE available for group messages addressed elsewhere", () => {
+			const ignoreDoc = allActionDocs.find((doc) => doc.name === "IGNORE");
+			expect(ignoreDoc).toBeDefined();
+			expect(ignoreDoc?.description).toContain(
+				"In group conversations, use IGNORE when the latest message is addressed to someone else and not to the agent",
+			);
+			expect(ignoreDoc?.descriptionCompressed).toContain(
+				"addressed to someone else in a group",
+			);
+		});
+
 		it("should validate action structure", () => {
 			for (const action of mockActions) {
 				expect(action).toHaveProperty("name");

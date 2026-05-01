@@ -1,27 +1,40 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { Label } from "../components/ui/label";
 import { Switch } from "../components/ui/switch";
 
-const meta: Meta<typeof Switch> = { title: "Atoms/Switch", component: Switch };
-export default meta;
+const meta = {
+  title: "UI/Switch",
+  component: Switch,
+  tags: ["autodocs"],
+  argTypes: {
+    disabled: { control: "boolean" },
+    defaultChecked: { control: "boolean" },
+  },
+} satisfies Meta<typeof Switch>;
 
-export const Default: StoryObj = {
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Default: Story = {};
+
+export const Checked: Story = {
+  args: { defaultChecked: true },
+};
+
+export const Disabled: Story = {
+  args: { disabled: true },
+};
+
+export const DisabledChecked: Story = {
+  args: { disabled: true, defaultChecked: true },
+};
+
+export const WithLabel: Story = {
   render: () => (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-3">
-        <Switch id="voice" defaultChecked />
-        <Label htmlFor="voice">Voice mode</Label>
-      </div>
-      <div className="flex items-center gap-3">
-        <Switch id="notify" />
-        <Label htmlFor="notify">Notifications</Label>
-      </div>
-      <div className="flex items-center gap-3">
-        <Switch id="locked" disabled />
-        <Label htmlFor="locked" className="opacity-50">
-          Premium
-        </Label>
-      </div>
+    <div className="flex items-center gap-2">
+      <Switch id="airplane-mode" />
+      <label htmlFor="airplane-mode" className="text-sm">
+        Airplane Mode
+      </label>
     </div>
   ),
 };

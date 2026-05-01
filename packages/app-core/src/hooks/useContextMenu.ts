@@ -4,12 +4,17 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { subscribeDesktopBridgeEvent } from "../bridge";
+import {
+  invokeDesktopBridgeRequest,
+  isElectrobunRuntime,
+  subscribeDesktopBridgeEvent,
+} from "../bridge";
 import {
   appendSavedCustomCommand,
   loadSavedCustomCommands,
   type SavedCustomCommand,
 } from "../chat";
+import { useChatInputRef } from "../state/ChatComposerContext";
 import { useApp } from "../state/useApp";
 
 export type CustomCommand = SavedCustomCommand;
@@ -27,8 +32,29 @@ export interface ContextMenuState {
   confirmSaveCommand: (name: string) => void;
 }
 
+function getSelectedText(target: EventTarget | null): string {
+  if (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement
+  ) {
+    const start = target.selectionStart ?? 0;
+    const end = target.selectionEnd ?? start;
+    return target.value.slice(start, end).trim();
+  }
+
+  if (typeof window.getSelection === "function") {
+    return window.getSelection()?.toString().trim() ?? "";
+  }
+
+  return "";
+}
+
 export function useContextMenu(): ContextMenuState {
-  const { setState, chatInput, handleChatSend, setActionNotice } = useApp();
+  const { setState, handleChatSend, setActionNotice } = useApp();
+  // useChatInputRef() returns a stable MutableRefObject — subscribing to it never
+  // causes re-renders, so App.tsx (which calls this hook) stays quiet while typing.
+  const chatInputRef = useChatInputRef();
+  const desktopRuntime = isElectrobunRuntime();
 
   const [saveCommandModalOpen, setSaveCommandModalOpen] = useState(false);
   const [saveCommandText, setSaveCommandText] = useState("");
@@ -63,7 +89,8 @@ export function useContextMenu(): ContextMenuState {
       const command = payload as { text: string } | undefined;
       if (!command?.text) return;
       const quoted = `> ${command.text}\n\n`;
-      setState("chatInput", quoted + chatInput);
+      const existing = chatInputRef?.current ?? "";
+      setState("chatInput", quoted + existing);
     };
 
     const unsubscribers = [
@@ -94,7 +121,36 @@ export function useContextMenu(): ContextMenuState {
         unsubscribe();
       }
     };
-  }, [setState, chatInput, handleChatSend]);
+  }, [setState, handleChatSend, chatInputRef]);
+
+  useEffect(() => {
+    if (!desktopRuntime || typeof window === "undefined") {
+      return;
+    }
+
+    const onContextMenu = (event: MouseEvent) => {
+      if (event.defaultPrevented) {
+        return;
+      }
+
+      const text = getSelectedText(event.target);
+      if (!text) {
+        return;
+      }
+
+      event.preventDefault();
+      void invokeDesktopBridgeRequest({
+        rpcMethod: "desktopShowSelectionContextMenu",
+        ipcChannel: "desktop:showSelectionContextMenu",
+        params: { text },
+      });
+    };
+
+    window.addEventListener("contextmenu", onContextMenu);
+    return () => {
+      window.removeEventListener("contextmenu", onContextMenu);
+    };
+  }, [desktopRuntime]);
 
   const closeSaveCommandModal = useCallback(() => {
     setSaveCommandModalOpen(false);

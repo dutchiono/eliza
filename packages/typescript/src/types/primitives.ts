@@ -90,6 +90,13 @@ export interface Content
 	/** The main text content visible to users */
 	text?: string;
 
+	/**
+	 * Optional callback merge hint for streaming UIs.
+	 * `replace` keeps the pre-callback prefix and swaps the callback suffix;
+	 * `append` adds new callback text to the current visible reply.
+	 */
+	merge?: "append" | "replace";
+
 	/** Actions to be performed */
 	actions?: string[];
 
@@ -167,7 +174,7 @@ export interface Content
 /**
  * Platform-provided metadata about mentions.
  * Contains ONLY technical facts from the platform API.
- * This allows bootstrap to make intelligent decisions about responding
+ * This allows basic-capabilities to make intelligent decisions about responding
  * while keeping platform-specific logic isolated.
  */
 export interface MentionContext

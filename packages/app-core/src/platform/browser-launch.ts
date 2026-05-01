@@ -1,4 +1,8 @@
 import { client } from "../api";
+import {
+  createPersistedActiveServer,
+  savePersistedActiveServer,
+} from "../state/persistence";
 
 function getSearchParams(): URLSearchParams {
   if (typeof window === "undefined") {
@@ -31,18 +35,23 @@ function normalizeLaunchApiBase(apiBase: string): string {
     throw new Error("Missing launch API base");
   }
 
+  const stripTrailingSlashes = (s: string): string => {
+    let end = s.length;
+    while (end > 0 && s.charCodeAt(end - 1) === 47) end--;
+    return s.slice(0, end);
+  };
   try {
     const parsed = new URL(trimmed);
     if (
       parsed.protocol === "https:" ||
       (parsed.protocol === "http:" && isAllowedHttpHost(parsed.hostname))
     ) {
-      return parsed.toString().replace(/\/+$/, "");
+      return stripTrailingSlashes(parsed.toString());
     }
     throw new Error(`Rejected launch apiBase protocol: ${parsed.protocol}`);
   } catch {
     if (trimmed.startsWith("/") && !trimmed.startsWith("//")) {
-      return trimmed.replace(/\/+$/, "") || "/";
+      return stripTrailingSlashes(trimmed) || "/";
     }
     throw new Error("Rejected invalid launch apiBase");
   }
@@ -77,46 +86,81 @@ async function exchangeCloudLaunchSession(
   cloudBaseUrl: string,
   sessionId: string,
 ): Promise<{ apiBase: string; token: string }> {
-  const response = await fetch(
-    `${cloudBaseUrl}/api/v1/milady/launch-sessions/${encodeURIComponent(sessionId)}`,
-    {
+  const sessionPath = encodeURIComponent(sessionId);
+  const launchSessionUrls = [
+    `${cloudBaseUrl}/api/v1/app/launch-sessions/${sessionPath}`,
+    `${cloudBaseUrl}/api/v1/app/launch-sessions/${sessionPath}`,
+  ];
+
+  let lastError: Error | null = null;
+
+  for (const url of launchSessionUrls) {
+    const response = await fetch(url, {
       method: "GET",
       headers: { Accept: "application/json" },
       redirect: "manual",
-    },
-  );
+    });
 
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => ({}))) as {
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      lastError = new Error(
+        payload.error ||
+          `Launch session exchange failed (HTTP ${response.status})`,
+      );
+
+      if (response.status === 404) {
+        continue;
+      }
+      throw lastError;
+    }
+
+    const payload = (await response.json()) as {
+      success?: boolean;
+      data?: {
+        connection?: { apiBase?: string; token?: string };
+      };
       error?: string;
     };
-    throw new Error(
-      payload.error ||
-        `Launch session exchange failed (HTTP ${response.status})`,
-    );
-  }
 
-  const payload = (await response.json()) as {
-    success?: boolean;
-    data?: {
-      connection?: { apiBase?: string; token?: string };
+    if (!payload.success || !payload.data?.connection?.apiBase) {
+      throw new Error(payload.error || "Launch session payload is invalid");
+    }
+
+    const token = payload.data.connection.token?.trim();
+    if (!token) {
+      throw new Error("Launch session did not include an access token");
+    }
+
+    return {
+      apiBase: normalizeLaunchApiBase(payload.data.connection.apiBase),
+      token,
     };
-    error?: string;
-  };
-
-  if (!payload.success || !payload.data?.connection?.apiBase) {
-    throw new Error(payload.error || "Launch session payload is invalid");
   }
 
-  const token = payload.data.connection.token?.trim();
-  if (!token) {
-    throw new Error("Launch session did not include an access token");
-  }
+  throw lastError ?? new Error("Launch session exchange failed");
+}
 
-  return {
-    apiBase: normalizeLaunchApiBase(payload.data.connection.apiBase),
-    token,
-  };
+export function applyLaunchConnection(args: {
+  apiBase: string;
+  token?: string | null;
+  kind?: "cloud" | "remote";
+}): { apiBase: string; token: string | null } {
+  const normalizedApiBase = normalizeLaunchApiBase(args.apiBase);
+  const token = args.token?.trim() || null;
+
+  client.setBaseUrl(normalizedApiBase);
+  client.setToken(token);
+  savePersistedActiveServer(
+    createPersistedActiveServer({
+      kind: args.kind ?? "remote",
+      apiBase: normalizedApiBase,
+      ...(token ? { accessToken: token } : {}),
+    }),
+  );
+
+  return { apiBase: normalizedApiBase, token };
 }
 
 export async function applyLaunchConnectionFromUrl(): Promise<boolean> {
@@ -131,8 +175,11 @@ export async function applyLaunchConnectionFromUrl(): Promise<boolean> {
       normalizeLaunchBaseUrl(launchBase),
       launchSession,
     );
-    client.setBaseUrl(connection.apiBase);
-    client.setToken(connection.token);
+    applyLaunchConnection({
+      kind: "cloud",
+      apiBase: connection.apiBase,
+      token: connection.token,
+    });
     stripLaunchParams();
     return true;
   }
@@ -142,8 +189,11 @@ export async function applyLaunchConnectionFromUrl(): Promise<boolean> {
     return false;
   }
 
-  client.setBaseUrl(normalizeLaunchApiBase(apiBase));
-  client.setToken(params.get("token")?.trim() || null);
+  applyLaunchConnection({
+    kind: "remote",
+    apiBase,
+    token: params.get("token")?.trim() || null,
+  });
   stripLaunchParams();
   return true;
 }

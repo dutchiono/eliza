@@ -29,6 +29,7 @@ class ActionDocParameterSchema(TypedDict, total=False):
 class ActionDocParameter(TypedDict, total=False):
     name: str
     description: str
+    descriptionCompressed: str
     required: bool
     schema: ActionDocParameterSchema
     examples: list[ActionDocParameterExampleValue]
@@ -48,6 +49,7 @@ class ActionDocExampleMessage(TypedDict, total=False):
 class ActionDoc(TypedDict, total=False):
     name: str
     description: str
+    descriptionCompressed: str
     similes: list[str]
     parameters: list[ActionDocParameter]
     examples: list[list[ActionDocExampleMessage]]
@@ -57,6 +59,7 @@ class ActionDoc(TypedDict, total=False):
 class ProviderDoc(TypedDict, total=False):
     name: str
     description: str
+    descriptionCompressed: str
     position: int
     dynamic: bool
 
@@ -97,11 +100,9 @@ _CORE_ACTION_DOCS_JSON = """{
   "actions": [
     {
       "name": "REPLY",
-      "description": "Replies to the current conversation with the text from the generated message. Default if the agent is responding with a message and no other action. Use REPLY at the beginning of a chain of actions as an acknowledgement, and at the end of a chain of actions as a final response.",
+      "description": "Send a direct chat reply in the current conversation/thread. Default if the agent is responding with a message and no other action. Use REPLY at the beginning of a chain of actions as an acknowledgement, and at the end of a chain of actions as a final response. This is not an email reply, inbox workflow, or external-channel send — use the dedicated connector actions for those surfaces.",
       "similes": [
         "GREET",
-        "REPLY_TO_MESSAGE",
-        "SEND_REPLY",
         "RESPOND",
         "RESPONSE"
       ],
@@ -175,11 +176,12 @@ _CORE_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Reply with generated msg. Default when responding with no other action. Use first as ack, last as final response."
     },
     {
       "name": "IGNORE",
-      "description": "Call this action if ignoring the user. If the user is aggressive, creepy or is finished with the conversation, use this action. Or, if both you and the user have already said goodbye, use this action instead of saying bye again. Use IGNORE any time the conversation has naturally ended. Do not use IGNORE if the user has engaged directly, or if something went wrong and you need to tell them. Only ignore if the user should be ignored.",
+      "description": "Call this action if ignoring the user. If the user is aggressive, creepy or is finished with the conversation, use this action. In group conversations, use IGNORE when the latest message is addressed to someone else and not to the agent. Or, if both you and the user have already said goodbye, use this action instead of saying bye again. Use IGNORE any time the conversation has naturally ended. Do not use IGNORE if the user has engaged directly, or if something went wrong and you need to tell them. Only ignore if the user should be ignored.",
       "similes": [
         "STOP_TALKING",
         "STOP_CHATTING",
@@ -290,7 +292,8 @@ _CORE_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Ignore user. Use when aggressive, creepy, conversation ended, addressed to someone else in a group, or both sides said goodbye. Don't use if user engaged directly or needs error info."
     },
     {
       "name": "NONE",
@@ -378,7 +381,8 @@ _CORE_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Respond without additional action. Default when speaking only."
     },
     {
       "name": "SEND_MESSAGE",
@@ -406,7 +410,8 @@ _CORE_ACTION_DOCS_JSON = """{
           "examples": [
             "user",
             "room"
-          ]
+          ],
+          "descriptionCompressed": "user or room target."
         },
         {
           "name": "source",
@@ -418,7 +423,8 @@ _CORE_ACTION_DOCS_JSON = """{
           "examples": [
             "telegram",
             "discord"
-          ]
+          ],
+          "descriptionCompressed": "Platform (telegram, discord, x)."
         },
         {
           "name": "target",
@@ -430,7 +436,8 @@ _CORE_ACTION_DOCS_JSON = """{
           "examples": [
             "dev_guru",
             "announcements"
-          ]
+          ],
+          "descriptionCompressed": "Target name/handle/id."
         },
         {
           "name": "text",
@@ -442,7 +449,8 @@ _CORE_ACTION_DOCS_JSON = """{
           "examples": [
             "Hello!",
             "Important announcement!"
-          ]
+          ],
+          "descriptionCompressed": "Message content."
         }
       ],
       "examples": [
@@ -514,11 +522,12 @@ _CORE_ACTION_DOCS_JSON = """{
             }
           }
         }
-      ]
+      ],
+      "descriptionCompressed": "Send msg to another user or room (not current)."
     },
     {
       "name": "ADD_CONTACT",
-      "description": "Add a new contact to the rolodex with categorization and preferences",
+      "description": "Add a new contact to the relationships with categorization and preferences",
       "similes": [
         "SAVE_CONTACT",
         "REMEMBER_PERSON",
@@ -529,7 +538,7 @@ _CORE_ACTION_DOCS_JSON = """{
         "add contact",
         "save contact",
         "add to contacts",
-        "add to rolodex",
+        "add to relationships",
         "remember this person",
         "save their info",
         "add them to my list",
@@ -548,7 +557,8 @@ _CORE_ACTION_DOCS_JSON = """{
           "examples": [
             "Sarah Chen",
             "John Smith"
-          ]
+          ],
+          "descriptionCompressed": "Contact name."
         },
         {
           "name": "notes",
@@ -559,7 +569,8 @@ _CORE_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "Met at the AI meetup; interested in agents"
-          ]
+          ],
+          "descriptionCompressed": "Optional notes/context."
         }
       ],
       "examples": [
@@ -581,13 +592,13 @@ _CORE_ACTION_DOCS_JSON = """{
           {
             "name": "{{name1}}",
             "content": {
-              "text": "Save this person as a friend in my rolodex"
+              "text": "Save this person as a friend in my relationships"
             }
           },
           {
             "name": "{{name2}}",
             "content": {
-              "text": "I've saved them as a friend in your rolodex."
+              "text": "I've saved them as a friend in your relationships."
             }
           }
         ],
@@ -605,11 +616,12 @@ _CORE_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Add contact to relationships with category/preferences."
     },
     {
       "name": "UPDATE_CONTACT",
-      "description": "Update an existing contact's details in the rolodex.",
+      "description": "Update an existing contact's details in the relationships.",
       "similes": [
         "EDIT_CONTACT",
         "MODIFY_CONTACT",
@@ -625,7 +637,8 @@ _CORE_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "Sarah Chen"
-          ]
+          ],
+          "descriptionCompressed": "Contact name (must match existing)."
         },
         {
           "name": "updates",
@@ -636,7 +649,8 @@ _CORE_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "{\\"notes\\":\\"prefers email\\",\\"tags\\":[\\"friend\\"]}"
-          ]
+          ],
+          "descriptionCompressed": "Fields to update (JSON)."
         }
       ],
       "examples": [
@@ -654,11 +668,12 @@ _CORE_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Update existing contact details."
     },
     {
       "name": "REMOVE_CONTACT",
-      "description": "Remove a contact from the rolodex.",
+      "description": "Remove a contact from the relationships.",
       "similes": [
         "DELETE_CONTACT",
         "REMOVE_FROM_ROLODEX",
@@ -676,7 +691,8 @@ _CORE_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "Sarah Chen"
-          ]
+          ],
+          "descriptionCompressed": "Contact name."
         }
       ],
       "examples": [
@@ -706,11 +722,12 @@ _CORE_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Remove contact from relationships."
     },
     {
       "name": "SEARCH_CONTACTS",
-      "description": "Search and list contacts in the rolodex by name or query.",
+      "description": "Search and list contacts in the relationships by name or query.",
       "similes": [
         "FIND_CONTACTS",
         "LOOKUP_CONTACTS",
@@ -733,7 +750,8 @@ _CORE_ACTION_DOCS_JSON = """{
           "examples": [
             "sarah",
             "AI meetup"
-          ]
+          ],
+          "descriptionCompressed": "Search query (name/handle/free-text)."
         }
       ],
       "examples": [
@@ -751,7 +769,8 @@ _CORE_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Search/list contacts by name or query."
     },
     {
       "name": "SCHEDULE_FOLLOW_UP",
@@ -778,7 +797,8 @@ _CORE_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "Sarah Chen"
-          ]
+          ],
+          "descriptionCompressed": "Contact name."
         },
         {
           "name": "when",
@@ -789,7 +809,8 @@ _CORE_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "2026-02-01T09:00:00Z"
-          ]
+          ],
+          "descriptionCompressed": "ISO-8601 datetime."
         },
         {
           "name": "reason",
@@ -800,7 +821,8 @@ _CORE_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "Check in about the agent framework demo"
-          ]
+          ],
+          "descriptionCompressed": "Optional reason/context."
         }
       ],
       "examples": [
@@ -818,7 +840,8 @@ _CORE_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Schedule follow-up reminder for contact."
     },
     {
       "name": "CHOOSE_OPTION",
@@ -842,7 +865,8 @@ _CORE_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "c0a8012e"
-          ]
+          ],
+          "descriptionCompressed": "Pending task id."
         },
         {
           "name": "option",
@@ -854,7 +878,8 @@ _CORE_ACTION_DOCS_JSON = """{
           "examples": [
             "APPROVE",
             "ABORT"
-          ]
+          ],
+          "descriptionCompressed": "Option name exactly as listed."
         }
       ],
       "examples": [
@@ -875,7 +900,8 @@ _CORE_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Select option for pending multi-choice task."
     },
     {
       "name": "FOLLOW_ROOM",
@@ -900,7 +926,8 @@ _CORE_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "00000000-0000-0000-0000-000000000000"
-          ]
+          ],
+          "descriptionCompressed": "Room id to follow."
         }
       ],
       "examples": [
@@ -938,7 +965,8 @@ _CORE_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Start following channel, chiming in without @mention. Only when explicitly asked."
     },
     {
       "name": "UNFOLLOW_ROOM",
@@ -963,7 +991,8 @@ _CORE_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "00000000-0000-0000-0000-000000000000"
-          ]
+          ],
+          "descriptionCompressed": "Room id to unfollow."
         }
       ],
       "examples": [
@@ -984,7 +1013,8 @@ _CORE_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Stop following room, cease updates."
     },
     {
       "name": "MUTE_ROOM",
@@ -1009,7 +1039,8 @@ _CORE_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "00000000-0000-0000-0000-000000000000"
-          ]
+          ],
+          "descriptionCompressed": "Room id to mute."
         }
       ],
       "examples": [
@@ -1047,7 +1078,8 @@ _CORE_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Mute room, ignore msgs unless @mentioned. Only when asked or annoying."
     },
     {
       "name": "UNMUTE_ROOM",
@@ -1072,7 +1104,8 @@ _CORE_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "00000000-0000-0000-0000-000000000000"
-          ]
+          ],
+          "descriptionCompressed": "Room id to unmute."
         }
       ],
       "examples": [
@@ -1093,7 +1126,8 @@ _CORE_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Unmute room, resume responding."
     },
     {
       "name": "UPDATE_SETTINGS",
@@ -1119,7 +1153,8 @@ _CORE_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "[{\\"key\\":\\"model\\",\\"value\\":\\"gpt-5\\"}]"
-          ]
+          ],
+          "descriptionCompressed": "JSON array of {key, value} updates."
         }
       ],
       "examples": [
@@ -1140,7 +1175,8 @@ _CORE_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Update agent settings via key/value pairs."
     },
     {
       "name": "UPDATE_ROLE",
@@ -1164,7 +1200,8 @@ _CORE_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "00000000-0000-0000-0000-000000000000"
-          ]
+          ],
+          "descriptionCompressed": "Entity id."
         },
         {
           "name": "role",
@@ -1176,7 +1213,8 @@ _CORE_ACTION_DOCS_JSON = """{
           "examples": [
             "admin",
             "member"
-          ]
+          ],
+          "descriptionCompressed": "Role to assign."
         }
       ],
       "examples": [
@@ -1197,7 +1235,8 @@ _CORE_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Assign role (Admin/Owner/None) to user(s) in channel."
     },
     {
       "name": "UPDATE_ENTITY",
@@ -1219,7 +1258,8 @@ _CORE_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "00000000-0000-0000-0000-000000000000"
-          ]
+          ],
+          "descriptionCompressed": "Entity id."
         },
         {
           "name": "updates",
@@ -1230,7 +1270,8 @@ _CORE_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "[{\\"name\\":\\"bio\\",\\"value\\":\\"Loves Rust\\"}]"
-          ]
+          ],
+          "descriptionCompressed": "JSON array of {name, value} updates."
         }
       ],
       "examples": [
@@ -1251,7 +1292,94 @@ _CORE_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Edit contact details for person in conversation."
+    },
+    {
+      "name": "THINK",
+      "description": "Pause and think deeply about a complex question, ambiguous request, or multi-faceted problem before responding. Use THINK when the question requires careful reasoning, when you are not confident in your initial assessment, when the user asks something nuanced that benefits from structured analysis, or when multiple valid approaches exist and you need to evaluate trade-offs. Do NOT use THINK for simple greetings, factual lookups, or straightforward requests where the answer is obvious. THINK re-processes the full conversation context through a larger, more capable model to produce a thorough, well-reasoned response.",
+      "similes": [
+        "PLAN",
+        "REASON",
+        "ANALYZE",
+        "REFLECT",
+        "CONSIDER",
+        "DELIBERATE",
+        "DEEP_THINK",
+        "PONDER"
+      ],
+      "parameters": [],
+      "examples": [
+        [
+          {
+            "name": "{{name1}}",
+            "content": {
+              "text": "What's the best architecture for a real-time multiplayer game with 10k concurrent users?"
+            }
+          },
+          {
+            "name": "{{name2}}",
+            "content": {
+              "text": "That's a great question with several important trade-offs to consider. Let me think through this carefully...",
+              "actions": [
+                "THINK"
+              ]
+            }
+          }
+        ],
+        [
+          {
+            "name": "{{name1}}",
+            "content": {
+              "text": "Should I use a monorepo or polyrepo for my team of 15 engineers working on 3 microservices?"
+            }
+          },
+          {
+            "name": "{{name2}}",
+            "content": {
+              "text": "Let me think about the trade-offs for your specific situation...",
+              "actions": [
+                "THINK"
+              ]
+            }
+          }
+        ],
+        [
+          {
+            "name": "{{name1}}",
+            "content": {
+              "text": "We're seeing intermittent 502 errors in production but only during peak hours. Our setup is nginx -> node -> postgres. What could cause this?"
+            }
+          },
+          {
+            "name": "{{name2}}",
+            "content": {
+              "text": "There are several possible causes here. Let me reason through the full request path systematically...",
+              "actions": [
+                "THINK"
+              ]
+            }
+          }
+        ],
+        [
+          {
+            "name": "{{name1}}",
+            "content": {
+              "text": "How should we handle authentication across our mobile app, web app, and API given we need SSO with both Google and enterprise SAML providers?"
+            }
+          },
+          {
+            "name": "{{name2}}",
+            "content": {
+              "text": "Cross-platform auth with multiple identity providers has some nuance. Let me plan this out...",
+              "actions": [
+                "THINK"
+              ]
+            }
+          }
+        ]
+      ],
+      "descriptionCompressed": "Deep reasoning for complex/ambiguous questions. Re-processes full context through larger model. Use when careful reasoning needed, not for simple lookups."
     },
     {
       "name": "GENERATE_IMAGE",
@@ -1275,7 +1403,8 @@ _CORE_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "A futuristic cityscape at sunset, cinematic lighting"
-          ]
+          ],
+          "descriptionCompressed": "Image prompt."
         }
       ],
       "examples": [
@@ -1330,7 +1459,8 @@ _CORE_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Generate image from conversation context. Use to visualize or illustrate."
     }
   ]
 }"""
@@ -1339,11 +1469,9 @@ _ALL_ACTION_DOCS_JSON = """{
   "actions": [
     {
       "name": "REPLY",
-      "description": "Replies to the current conversation with the text from the generated message. Default if the agent is responding with a message and no other action. Use REPLY at the beginning of a chain of actions as an acknowledgement, and at the end of a chain of actions as a final response.",
+      "description": "Send a direct chat reply in the current conversation/thread. Default if the agent is responding with a message and no other action. Use REPLY at the beginning of a chain of actions as an acknowledgement, and at the end of a chain of actions as a final response. This is not an email reply, inbox workflow, or external-channel send — use the dedicated connector actions for those surfaces.",
       "similes": [
         "GREET",
-        "REPLY_TO_MESSAGE",
-        "SEND_REPLY",
         "RESPOND",
         "RESPONSE"
       ],
@@ -1417,11 +1545,12 @@ _ALL_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Reply with generated msg. Default when responding with no other action. Use first as ack, last as final response."
     },
     {
       "name": "IGNORE",
-      "description": "Call this action if ignoring the user. If the user is aggressive, creepy or is finished with the conversation, use this action. Or, if both you and the user have already said goodbye, use this action instead of saying bye again. Use IGNORE any time the conversation has naturally ended. Do not use IGNORE if the user has engaged directly, or if something went wrong and you need to tell them. Only ignore if the user should be ignored.",
+      "description": "Call this action if ignoring the user. If the user is aggressive, creepy or is finished with the conversation, use this action. In group conversations, use IGNORE when the latest message is addressed to someone else and not to the agent. Or, if both you and the user have already said goodbye, use this action instead of saying bye again. Use IGNORE any time the conversation has naturally ended. Do not use IGNORE if the user has engaged directly, or if something went wrong and you need to tell them. Only ignore if the user should be ignored.",
       "similes": [
         "STOP_TALKING",
         "STOP_CHATTING",
@@ -1532,7 +1661,8 @@ _ALL_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Ignore user. Use when aggressive, creepy, conversation ended, addressed to someone else in a group, or both sides said goodbye. Don't use if user engaged directly or needs error info."
     },
     {
       "name": "NONE",
@@ -1620,7 +1750,8 @@ _ALL_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Respond without additional action. Default when speaking only."
     },
     {
       "name": "SEND_MESSAGE",
@@ -1648,7 +1779,8 @@ _ALL_ACTION_DOCS_JSON = """{
           "examples": [
             "user",
             "room"
-          ]
+          ],
+          "descriptionCompressed": "user or room target."
         },
         {
           "name": "source",
@@ -1660,7 +1792,8 @@ _ALL_ACTION_DOCS_JSON = """{
           "examples": [
             "telegram",
             "discord"
-          ]
+          ],
+          "descriptionCompressed": "Platform (telegram, discord, x)."
         },
         {
           "name": "target",
@@ -1672,7 +1805,8 @@ _ALL_ACTION_DOCS_JSON = """{
           "examples": [
             "dev_guru",
             "announcements"
-          ]
+          ],
+          "descriptionCompressed": "Target name/handle/id."
         },
         {
           "name": "text",
@@ -1684,7 +1818,8 @@ _ALL_ACTION_DOCS_JSON = """{
           "examples": [
             "Hello!",
             "Important announcement!"
-          ]
+          ],
+          "descriptionCompressed": "Message content."
         }
       ],
       "examples": [
@@ -1756,11 +1891,12 @@ _ALL_ACTION_DOCS_JSON = """{
             }
           }
         }
-      ]
+      ],
+      "descriptionCompressed": "Send msg to another user or room (not current)."
     },
     {
       "name": "ADD_CONTACT",
-      "description": "Add a new contact to the rolodex with categorization and preferences",
+      "description": "Add a new contact to the relationships with categorization and preferences",
       "similes": [
         "SAVE_CONTACT",
         "REMEMBER_PERSON",
@@ -1771,7 +1907,7 @@ _ALL_ACTION_DOCS_JSON = """{
         "add contact",
         "save contact",
         "add to contacts",
-        "add to rolodex",
+        "add to relationships",
         "remember this person",
         "save their info",
         "add them to my list",
@@ -1790,7 +1926,8 @@ _ALL_ACTION_DOCS_JSON = """{
           "examples": [
             "Sarah Chen",
             "John Smith"
-          ]
+          ],
+          "descriptionCompressed": "Contact name."
         },
         {
           "name": "notes",
@@ -1801,7 +1938,8 @@ _ALL_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "Met at the AI meetup; interested in agents"
-          ]
+          ],
+          "descriptionCompressed": "Optional notes/context."
         }
       ],
       "examples": [
@@ -1823,13 +1961,13 @@ _ALL_ACTION_DOCS_JSON = """{
           {
             "name": "{{name1}}",
             "content": {
-              "text": "Save this person as a friend in my rolodex"
+              "text": "Save this person as a friend in my relationships"
             }
           },
           {
             "name": "{{name2}}",
             "content": {
-              "text": "I've saved them as a friend in your rolodex."
+              "text": "I've saved them as a friend in your relationships."
             }
           }
         ],
@@ -1847,11 +1985,12 @@ _ALL_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Add contact to relationships with category/preferences."
     },
     {
       "name": "UPDATE_CONTACT",
-      "description": "Update an existing contact's details in the rolodex.",
+      "description": "Update an existing contact's details in the relationships.",
       "similes": [
         "EDIT_CONTACT",
         "MODIFY_CONTACT",
@@ -1867,7 +2006,8 @@ _ALL_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "Sarah Chen"
-          ]
+          ],
+          "descriptionCompressed": "Contact name (must match existing)."
         },
         {
           "name": "updates",
@@ -1878,7 +2018,8 @@ _ALL_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "{\\"notes\\":\\"prefers email\\",\\"tags\\":[\\"friend\\"]}"
-          ]
+          ],
+          "descriptionCompressed": "Fields to update (JSON)."
         }
       ],
       "examples": [
@@ -1896,11 +2037,12 @@ _ALL_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Update existing contact details."
     },
     {
       "name": "REMOVE_CONTACT",
-      "description": "Remove a contact from the rolodex.",
+      "description": "Remove a contact from the relationships.",
       "similes": [
         "DELETE_CONTACT",
         "REMOVE_FROM_ROLODEX",
@@ -1918,7 +2060,8 @@ _ALL_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "Sarah Chen"
-          ]
+          ],
+          "descriptionCompressed": "Contact name."
         }
       ],
       "examples": [
@@ -1948,11 +2091,12 @@ _ALL_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Remove contact from relationships."
     },
     {
       "name": "SEARCH_CONTACTS",
-      "description": "Search and list contacts in the rolodex by name or query.",
+      "description": "Search and list contacts in the relationships by name or query.",
       "similes": [
         "FIND_CONTACTS",
         "LOOKUP_CONTACTS",
@@ -1975,7 +2119,8 @@ _ALL_ACTION_DOCS_JSON = """{
           "examples": [
             "sarah",
             "AI meetup"
-          ]
+          ],
+          "descriptionCompressed": "Search query (name/handle/free-text)."
         }
       ],
       "examples": [
@@ -1993,7 +2138,8 @@ _ALL_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Search/list contacts by name or query."
     },
     {
       "name": "SCHEDULE_FOLLOW_UP",
@@ -2020,7 +2166,8 @@ _ALL_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "Sarah Chen"
-          ]
+          ],
+          "descriptionCompressed": "Contact name."
         },
         {
           "name": "when",
@@ -2031,7 +2178,8 @@ _ALL_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "2026-02-01T09:00:00Z"
-          ]
+          ],
+          "descriptionCompressed": "ISO-8601 datetime."
         },
         {
           "name": "reason",
@@ -2042,7 +2190,8 @@ _ALL_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "Check in about the agent framework demo"
-          ]
+          ],
+          "descriptionCompressed": "Optional reason/context."
         }
       ],
       "examples": [
@@ -2060,7 +2209,8 @@ _ALL_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Schedule follow-up reminder for contact."
     },
     {
       "name": "CHOOSE_OPTION",
@@ -2084,7 +2234,8 @@ _ALL_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "c0a8012e"
-          ]
+          ],
+          "descriptionCompressed": "Pending task id."
         },
         {
           "name": "option",
@@ -2096,7 +2247,8 @@ _ALL_ACTION_DOCS_JSON = """{
           "examples": [
             "APPROVE",
             "ABORT"
-          ]
+          ],
+          "descriptionCompressed": "Option name exactly as listed."
         }
       ],
       "examples": [
@@ -2117,7 +2269,8 @@ _ALL_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Select option for pending multi-choice task."
     },
     {
       "name": "FOLLOW_ROOM",
@@ -2142,7 +2295,8 @@ _ALL_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "00000000-0000-0000-0000-000000000000"
-          ]
+          ],
+          "descriptionCompressed": "Room id to follow."
         }
       ],
       "examples": [
@@ -2180,7 +2334,8 @@ _ALL_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Start following channel, chiming in without @mention. Only when explicitly asked."
     },
     {
       "name": "UNFOLLOW_ROOM",
@@ -2205,7 +2360,8 @@ _ALL_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "00000000-0000-0000-0000-000000000000"
-          ]
+          ],
+          "descriptionCompressed": "Room id to unfollow."
         }
       ],
       "examples": [
@@ -2226,7 +2382,8 @@ _ALL_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Stop following room, cease updates."
     },
     {
       "name": "MUTE_ROOM",
@@ -2251,7 +2408,8 @@ _ALL_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "00000000-0000-0000-0000-000000000000"
-          ]
+          ],
+          "descriptionCompressed": "Room id to mute."
         }
       ],
       "examples": [
@@ -2289,7 +2447,8 @@ _ALL_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Mute room, ignore msgs unless @mentioned. Only when asked or annoying."
     },
     {
       "name": "UNMUTE_ROOM",
@@ -2314,7 +2473,8 @@ _ALL_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "00000000-0000-0000-0000-000000000000"
-          ]
+          ],
+          "descriptionCompressed": "Room id to unmute."
         }
       ],
       "examples": [
@@ -2335,7 +2495,8 @@ _ALL_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Unmute room, resume responding."
     },
     {
       "name": "UPDATE_SETTINGS",
@@ -2361,7 +2522,8 @@ _ALL_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "[{\\"key\\":\\"model\\",\\"value\\":\\"gpt-5\\"}]"
-          ]
+          ],
+          "descriptionCompressed": "JSON array of {key, value} updates."
         }
       ],
       "examples": [
@@ -2382,7 +2544,8 @@ _ALL_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Update agent settings via key/value pairs."
     },
     {
       "name": "UPDATE_ROLE",
@@ -2406,7 +2569,8 @@ _ALL_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "00000000-0000-0000-0000-000000000000"
-          ]
+          ],
+          "descriptionCompressed": "Entity id."
         },
         {
           "name": "role",
@@ -2418,7 +2582,8 @@ _ALL_ACTION_DOCS_JSON = """{
           "examples": [
             "admin",
             "member"
-          ]
+          ],
+          "descriptionCompressed": "Role to assign."
         }
       ],
       "examples": [
@@ -2439,7 +2604,8 @@ _ALL_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Assign role (Admin/Owner/None) to user(s) in channel."
     },
     {
       "name": "UPDATE_ENTITY",
@@ -2461,7 +2627,8 @@ _ALL_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "00000000-0000-0000-0000-000000000000"
-          ]
+          ],
+          "descriptionCompressed": "Entity id."
         },
         {
           "name": "updates",
@@ -2472,7 +2639,8 @@ _ALL_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "[{\\"name\\":\\"bio\\",\\"value\\":\\"Loves Rust\\"}]"
-          ]
+          ],
+          "descriptionCompressed": "JSON array of {name, value} updates."
         }
       ],
       "examples": [
@@ -2493,7 +2661,94 @@ _ALL_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Edit contact details for person in conversation."
+    },
+    {
+      "name": "THINK",
+      "description": "Pause and think deeply about a complex question, ambiguous request, or multi-faceted problem before responding. Use THINK when the question requires careful reasoning, when you are not confident in your initial assessment, when the user asks something nuanced that benefits from structured analysis, or when multiple valid approaches exist and you need to evaluate trade-offs. Do NOT use THINK for simple greetings, factual lookups, or straightforward requests where the answer is obvious. THINK re-processes the full conversation context through a larger, more capable model to produce a thorough, well-reasoned response.",
+      "similes": [
+        "PLAN",
+        "REASON",
+        "ANALYZE",
+        "REFLECT",
+        "CONSIDER",
+        "DELIBERATE",
+        "DEEP_THINK",
+        "PONDER"
+      ],
+      "parameters": [],
+      "examples": [
+        [
+          {
+            "name": "{{name1}}",
+            "content": {
+              "text": "What's the best architecture for a real-time multiplayer game with 10k concurrent users?"
+            }
+          },
+          {
+            "name": "{{name2}}",
+            "content": {
+              "text": "That's a great question with several important trade-offs to consider. Let me think through this carefully...",
+              "actions": [
+                "THINK"
+              ]
+            }
+          }
+        ],
+        [
+          {
+            "name": "{{name1}}",
+            "content": {
+              "text": "Should I use a monorepo or polyrepo for my team of 15 engineers working on 3 microservices?"
+            }
+          },
+          {
+            "name": "{{name2}}",
+            "content": {
+              "text": "Let me think about the trade-offs for your specific situation...",
+              "actions": [
+                "THINK"
+              ]
+            }
+          }
+        ],
+        [
+          {
+            "name": "{{name1}}",
+            "content": {
+              "text": "We're seeing intermittent 502 errors in production but only during peak hours. Our setup is nginx -> node -> postgres. What could cause this?"
+            }
+          },
+          {
+            "name": "{{name2}}",
+            "content": {
+              "text": "There are several possible causes here. Let me reason through the full request path systematically...",
+              "actions": [
+                "THINK"
+              ]
+            }
+          }
+        ],
+        [
+          {
+            "name": "{{name1}}",
+            "content": {
+              "text": "How should we handle authentication across our mobile app, web app, and API given we need SSO with both Google and enterprise SAML providers?"
+            }
+          },
+          {
+            "name": "{{name2}}",
+            "content": {
+              "text": "Cross-platform auth with multiple identity providers has some nuance. Let me plan this out...",
+              "actions": [
+                "THINK"
+              ]
+            }
+          }
+        ]
+      ],
+      "descriptionCompressed": "Deep reasoning for complex/ambiguous questions. Re-processes full context through larger model. Use when careful reasoning needed, not for simple lookups."
     },
     {
       "name": "GENERATE_IMAGE",
@@ -2517,7 +2772,8 @@ _ALL_ACTION_DOCS_JSON = """{
           },
           "examples": [
             "A futuristic cityscape at sunset, cinematic lighting"
-          ]
+          ],
+          "descriptionCompressed": "Image prompt."
         }
       ],
       "examples": [
@@ -2572,7 +2828,1222 @@ _ALL_ACTION_DOCS_JSON = """{
             }
           }
         ]
-      ]
+      ],
+      "descriptionCompressed": "Generate image from conversation context. Use to visualize or illustrate."
+    },
+    {
+      "name": "ADD_TO_PLAYLIST",
+      "description": "Add music to a playlist after confirmed:true. If the track is not already in the library, the configured music fetch service must resolve it first. Creates the playlist if it does not exist.",
+      "parameters": [],
+      "similes": [
+        "ADD_SONG_TO_PLAYLIST",
+        "PUT_IN_PLAYLIST",
+        "SAVE_TO_PLAYLIST",
+        "ADD_TRACK_TO_PLAYLIST"
+      ],
+      "descriptionCompressed": "Add music to a playlist after confirmed:true. If the track is not already in the library, the configured music fetch service must resolve it first. Creates t..."
+    },
+    {
+      "name": "BLUEBUBBLES_SEND_REACTION",
+      "description": "Add or remove a reaction on a message via BlueBubbles",
+      "parameters": [],
+      "similes": [
+        "BLUEBUBBLES_REACT",
+        "BB_REACTION",
+        "IMESSAGE_REACT"
+      ],
+      "descriptionCompressed": "Add or remove a reaction on a message via BlueBubbles"
+    },
+    {
+      "name": "BROWSER_ACTION",
+      "description": "Control a Chromium-based browser through the local runtime. This action opens or connects to a browser session, navigates pages, clicks elements, types into forms, reads DOM state, executes JavaScript, waits for conditions, and manages tabs.\\n\\n",
+      "parameters": [],
+      "similes": [
+        "CONTROL_BROWSER",
+        "WEB_BROWSER",
+        "OPEN_BROWSER",
+        "BROWSE_WEB",
+        "NAVIGATE_BROWSER",
+        "BROWSER_CLICK",
+        "BROWSER_TYPE"
+      ],
+      "descriptionCompressed": "Control a Chromium-based browser through the local runtime. This action opens or connects to a browser session, navigates pages, clicks elements, types into..."
+    },
+    {
+      "name": "CHECK_CLOUD_CREDITS",
+      "description": "Check ElizaCloud credit balance, container costs, and estimated remaining runtime.",
+      "parameters": [],
+      "similes": [
+        "check credits",
+        "check balance",
+        "how much credit",
+        "cloud billing"
+      ],
+      "descriptionCompressed": "Check ElizaCloud credit balance, container costs, and estimated remaining runtime."
+    },
+    {
+      "name": "COMMANDS_LIST",
+      "description": "List all available commands with their aliases. Only activates for /commands or /cmds slash commands.",
+      "parameters": [],
+      "similes": [
+        "/commands",
+        "/cmds"
+      ],
+      "descriptionCompressed": "List all available commands with their aliases. Only activates for /commands or /cmds slash commands."
+    },
+    {
+      "name": "DELETE_MESSAGE",
+      "description": "Delete a message from a Discord channel",
+      "parameters": [],
+      "similes": [
+        "REMOVE_MESSAGE",
+        "UNSEND_MESSAGE",
+        "DELETE_DISCORD_MESSAGE"
+      ],
+      "descriptionCompressed": "Delete a message from a Discord channel"
+    },
+    {
+      "name": "DELETE_PLAYLIST",
+      "description": "Delete a saved playlist after confirmed:true. Works best in DMs to avoid flooding group chats.",
+      "parameters": [
+        {
+          "name": "data",
+          "description": "The data to use.",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "examples": [
+            "example"
+          ],
+          "descriptionCompressed": "The data to use."
+        }
+      ],
+      "similes": [
+        "REMOVE_PLAYLIST",
+        "DELETE_SAVED_PLAYLIST",
+        "REMOVE_SAVED_PLAYLIST"
+      ],
+      "exampleCalls": [
+        {
+          "user": "Use DELETE_PLAYLIST with the provided parameters.",
+          "actions": [
+            "DELETE_PLAYLIST"
+          ],
+          "params": {
+            "DELETE_PLAYLIST": {
+              "data": "example"
+            }
+          }
+        }
+      ],
+      "descriptionCompressed": "Delete a saved playlist after confirmed:true. Works best in DMs to avoid flooding group chats."
+    },
+    {
+      "name": "DOWNLOAD_MUSIC",
+      "description": "Download music to the local library without playing it. Requires confirmed:true before fetching and saving.",
+      "parameters": [],
+      "similes": [
+        "FETCH_MUSIC",
+        "GET_MUSIC",
+        "DOWNLOAD_SONG",
+        "SAVE_MUSIC",
+        "GRAB_MUSIC"
+      ],
+      "descriptionCompressed": "Download music to the local library without playing it. Requires confirmed:true before fetching and saving."
+    },
+    {
+      "name": "EDIT_MESSAGE",
+      "description": "Edit an existing message in a Discord channel",
+      "parameters": [],
+      "similes": [
+        "UPDATE_MESSAGE",
+        "MODIFY_MESSAGE",
+        "CHANGE_MESSAGE",
+        "EDIT_DISCORD_MESSAGE"
+      ],
+      "descriptionCompressed": "Edit an existing message in a Discord channel"
+    },
+    {
+      "name": "FETCH_FEED_TOP",
+      "description": "Fetch the home timeline from X and return the top-N tweets ranked by engagement (likes + retweets * 2).",
+      "parameters": [],
+      "similes": [
+        "GET_X_FEED",
+        "TOP_TWEETS",
+        "FEED_TOP"
+      ],
+      "descriptionCompressed": "Fetch the home timeline from X and return the top-N tweets ranked by engagement (likes + retweets * 2)."
+    },
+    {
+      "name": "FILE_ACTION",
+      "description": "Perform local filesystem operations through the computer-use service. This includes read, write, edit, append, delete, exists, list, delete_directory, upload, download, and list_downloads actions.\\n\\n",
+      "parameters": [],
+      "similes": [
+        "READ_FILE",
+        "WRITE_FILE",
+        "EDIT_FILE",
+        "DELETE_FILE",
+        "LIST_DIRECTORY",
+        "FILE_OPERATION"
+      ],
+      "descriptionCompressed": "Perform local filesystem operations through the computer-use service. This includes read, write, edit, append, delete, exists, list, delete_directory, upload..."
+    },
+    {
+      "name": "FINALIZE_WORKSPACE",
+      "description": "Finalize workspace changes by committing, pushing, and optionally creating a pull request. ",
+      "parameters": [
+        {
+          "name": "codingWorkspace",
+          "description": "The coding workspace to use.",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "examples": [
+            "example"
+          ],
+          "descriptionCompressed": "The coding workspace to use."
+        }
+      ],
+      "similes": [
+        "COMMIT_AND_PR",
+        "CREATE_PR",
+        "SUBMIT_CHANGES",
+        "FINISH_WORKSPACE"
+      ],
+      "exampleCalls": [
+        {
+          "user": "Use FINALIZE_WORKSPACE with the provided parameters.",
+          "actions": [
+            "FINALIZE_WORKSPACE"
+          ],
+          "params": {
+            "FINALIZE_WORKSPACE": {
+              "codingWorkspace": "example"
+            }
+          }
+        }
+      ],
+      "descriptionCompressed": "Finalize workspace changes by committing, pushing, and optionally creating a pull request."
+    },
+    {
+      "name": "FREEZE_CLOUD_AGENT",
+      "description": "Freeze a cloud agent: snapshot state, disconnect bridge, stop container.",
+      "parameters": [],
+      "similes": [
+        "freeze agent",
+        "hibernate agent",
+        "pause agent",
+        "stop cloud agent"
+      ],
+      "descriptionCompressed": "Freeze a cloud agent: snapshot state, disconnect bridge, stop container."
+    },
+    {
+      "name": "GET_SKILL_DETAILS",
+      "description": "Get detailed information about a specific skill including version, owner, and stats.",
+      "parameters": [],
+      "similes": [
+        "SKILL_INFO",
+        "SKILL_DETAILS"
+      ],
+      "descriptionCompressed": "Get detailed information about a specific skill including version, owner, and stats."
+    },
+    {
+      "name": "HELP_COMMAND",
+      "description": "Show available commands and their descriptions. Only activates for /help, /h, or /? slash commands.",
+      "parameters": [],
+      "similes": [
+        "/help",
+        "/h",
+        "/?"
+      ],
+      "descriptionCompressed": "Show available commands and their descriptions. Only activates for /help, /h, or /? slash commands."
+    },
+    {
+      "name": "IMESSAGE_SEND_MESSAGE",
+      "description": "Send a text message via iMessage (macOS only)",
+      "parameters": [],
+      "similes": [
+        "SEND_IMESSAGE",
+        "IMESSAGE_TEXT",
+        "TEXT_IMESSAGE",
+        "SEND_IMSG"
+      ],
+      "descriptionCompressed": "Send a text message via iMessage (macOS only)"
+    },
+    {
+      "name": "INSTALL_SKILL",
+      "description": "Install a skill from the ClawHub registry. The skill will be security-scanned before activation. ",
+      "parameters": [],
+      "similes": [
+        "DOWNLOAD_SKILL",
+        "ADD_SKILL",
+        "GET_SKILL"
+      ],
+      "descriptionCompressed": "Install a skill from the ClawHub registry. The skill will be security-scanned before activation."
+    },
+    {
+      "name": "LIST_AGENTS",
+      "description": "List active task agents together with current task progress so the main agent can keep the user updated while work continues asynchronously.",
+      "parameters": [],
+      "similes": [
+        "LIST_CODING_AGENTS",
+        "SHOW_CODING_AGENTS",
+        "GET_ACTIVE_AGENTS",
+        "LIST_SESSIONS",
+        "SHOW_CODING_SESSIONS",
+        "SHOW_TASK_AGENTS",
+        "LIST_SUB_AGENTS",
+        "SHOW_TASK_STATUS"
+      ],
+      "descriptionCompressed": "List active task agents together with current task progress so the main agent can keep the user updated while work continues asynchronously."
+    },
+    {
+      "name": "LIST_EJECTED_PLUGINS",
+      "description": "List all ejected plugins currently being managed locally",
+      "parameters": [],
+      "similes": [
+        "list ejected",
+        "show ejected plugins",
+        "which plugins are ejected",
+        "list local plugins"
+      ],
+      "descriptionCompressed": "List all ejected plugins currently being managed locally"
+    },
+    {
+      "name": "LIST_PLAYLISTS",
+      "description": "List all saved playlists for the user. Works best in DMs to avoid flooding group chats.",
+      "parameters": [
+        {
+          "name": "data",
+          "description": "The data to use.",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "examples": [
+            "example"
+          ],
+          "descriptionCompressed": "The data to use."
+        }
+      ],
+      "similes": [
+        "SHOW_PLAYLISTS",
+        "MY_PLAYLISTS",
+        "PLAYLIST_LIST",
+        "VIEW_PLAYLISTS"
+      ],
+      "exampleCalls": [
+        {
+          "user": "Use LIST_PLAYLISTS with the provided parameters.",
+          "actions": [
+            "LIST_PLAYLISTS"
+          ],
+          "params": {
+            "LIST_PLAYLISTS": {
+              "data": "example"
+            }
+          }
+        }
+      ],
+      "descriptionCompressed": "List all saved playlists for the user. Works best in DMs to avoid flooding group chats."
+    },
+    {
+      "name": "LOAD_PLAYLIST",
+      "description": "Load a saved playlist and add all tracks to the queue after confirmed:true. Works best in DMs to avoid flooding group chats.",
+      "parameters": [
+        {
+          "name": "data",
+          "description": "The data to use.",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "examples": [
+            "example"
+          ],
+          "descriptionCompressed": "The data to use."
+        }
+      ],
+      "similes": [
+        "PLAY_PLAYLIST",
+        "LOAD_QUEUE",
+        "RESTORE_PLAYLIST",
+        "PLAY_SAVED_PLAYLIST"
+      ],
+      "exampleCalls": [
+        {
+          "user": "Use LOAD_PLAYLIST with the provided parameters.",
+          "actions": [
+            "LOAD_PLAYLIST"
+          ],
+          "params": {
+            "LOAD_PLAYLIST": {
+              "data": "example"
+            }
+          }
+        }
+      ],
+      "descriptionCompressed": "Load a saved playlist and add all tracks to the queue after confirmed:true. Works best in DMs to avoid flooding group chats."
+    },
+    {
+      "name": "MANAGE_ISSUES",
+      "description": "Manage GitHub issues for a repository. ",
+      "parameters": [],
+      "similes": [
+        "CREATE_ISSUE",
+        "LIST_ISSUES",
+        "CLOSE_ISSUE",
+        "COMMENT_ISSUE",
+        "UPDATE_ISSUE",
+        "GET_ISSUE"
+      ],
+      "descriptionCompressed": "Manage GitHub issues for a repository."
+    },
+    {
+      "name": "MANAGE_SHOPIFY_CUSTOMERS",
+      "description": "List and search customers in a connected Shopify store.",
+      "parameters": [],
+      "similes": [
+        "LIST_CUSTOMERS",
+        "FIND_CUSTOMER",
+        "SEARCH_CUSTOMERS"
+      ],
+      "descriptionCompressed": "List and search customers in a connected Shopify store."
+    },
+    {
+      "name": "MANAGE_SHOPIFY_INVENTORY",
+      "description": "Check inventory levels and list store locations. Stock adjustments require confirmed:true.",
+      "parameters": [],
+      "similes": [
+        "CHECK_INVENTORY",
+        "ADJUST_INVENTORY",
+        "CHECK_STOCK",
+        "UPDATE_STOCK"
+      ],
+      "descriptionCompressed": "Check inventory levels and list store locations. Stock adjustments require confirmed:true."
+    },
+    {
+      "name": "MANAGE_SHOPIFY_ORDERS",
+      "description": "List recent orders and check order status. Fulfillment requires confirmed:true.",
+      "parameters": [],
+      "similes": [
+        "LIST_ORDERS",
+        "CHECK_ORDERS",
+        "FULFILL_ORDER",
+        "ORDER_STATUS"
+      ],
+      "descriptionCompressed": "List recent orders and check order status. Fulfillment requires confirmed:true."
+    },
+    {
+      "name": "MANAGE_SHOPIFY_PRODUCTS",
+      "description": "List and search Shopify products. Product creation and updates require confirmed:true.",
+      "parameters": [],
+      "similes": [
+        "LIST_PRODUCTS",
+        "CREATE_PRODUCT",
+        "UPDATE_PRODUCT",
+        "SEARCH_PRODUCTS"
+      ],
+      "descriptionCompressed": "List and search Shopify products. Product creation and updates require confirmed:true."
+    },
+    {
+      "name": "MANAGE_WINDOW",
+      "description": "Manage desktop windows — list all visible windows, bring a window to the front, ",
+      "parameters": [],
+      "similes": [
+        "LIST_WINDOWS",
+        "FOCUS_WINDOW",
+        "SWITCH_WINDOW",
+        "ARRANGE_WINDOWS",
+        "MOVE_WINDOW",
+        "MINIMIZE_WINDOW",
+        "MAXIMIZE_WINDOW",
+        "CLOSE_WINDOW",
+        "WINDOW_MANAGEMENT"
+      ],
+      "descriptionCompressed": "Manage desktop windows — list all visible windows, bring a window to the front,"
+    },
+    {
+      "name": "MODELS_COMMAND",
+      "description": "List available AI models and providers. Only activates for /models slash command.",
+      "parameters": [],
+      "similes": [
+        "/models"
+      ],
+      "descriptionCompressed": "List available AI models and providers. Only activates for /models slash command."
+    },
+    {
+      "name": "PAUSE_MUSIC",
+      "description": "Pause the currently playing track (hold playback). Use whenever the user asks to pause music or audio. ",
+      "parameters": [],
+      "similes": [
+        "PAUSE",
+        "PAUSE_AUDIO",
+        "PAUSE_SONG",
+        "PAUSE_PLAYBACK"
+      ],
+      "descriptionCompressed": "Pause the currently playing track (hold playback). Use whenever the user asks to pause music or audio."
+    },
+    {
+      "name": "PLAY_AUDIO",
+      "description": "Start playing a new song: provide a track name, artist, search words, or a media URL. ",
+      "parameters": [],
+      "similes": [
+        "PLAY_YOUTUBE",
+        "PLAY_YOUTUBE_AUDIO",
+        "PLAY_VIDEO_AUDIO",
+        "PLAY_MUSIC",
+        "PLAY_SONG",
+        "PLAY_TRACK",
+        "START_MUSIC",
+        "PLAY_THIS",
+        "STREAM_YOUTUBE",
+        "PLAY_FROM_YOUTUBE",
+        "QUEUE_SONG",
+        "ADD_TO_QUEUE"
+      ],
+      "descriptionCompressed": "Start playing a new song: provide a track name, artist, search words, or a media URL."
+    },
+    {
+      "name": "PLAY_MUSIC_QUERY",
+      "description": "Handle any complex music query that requires understanding and research, then queue the selected track after confirmed:true. Supports: artist queries (first single, latest song, similar artists, popular songs, nth album), temporal (80s, 90s, specific years), genre/mood/vibe, activities (workout, study, party), charts/trending, albums, movie/game/TV soundtracks, lyrics/topics, versions (covers, remixes, acoustic, live), and more. Uses Wikipedia, music databases, and web search to find the right music.",
+      "parameters": [],
+      "similes": [
+        "SMART_PLAY",
+        "RESEARCH_AND_PLAY",
+        "FIND_AND_PLAY",
+        "INTELLIGENT_MUSIC_SEARCH"
+      ],
+      "descriptionCompressed": "Handle any complex music query that requires understanding and research, then queue the selected track after confirmed:true. Supports: artist queries (first..."
+    },
+    {
+      "name": "POST_TWEET",
+      "description": "Post a tweet on Twitter",
+      "parameters": [],
+      "similes": [
+        "TWEET",
+        "SEND_TWEET",
+        "TWITTER_POST",
+        "POST_ON_TWITTER",
+        "SHARE_ON_TWITTER"
+      ],
+      "descriptionCompressed": "Post a tweet on Twitter"
+    },
+    {
+      "name": "PROVISION_CLOUD_AGENT",
+      "description": "Deploy an ElizaOS agent to ElizaCloud. Provisions a container, waits for deployment, connects the bridge, and starts auto-backup.",
+      "parameters": [],
+      "similes": [
+        "deploy agent to cloud",
+        "launch cloud agent",
+        "start remote agent",
+        "provision container"
+      ],
+      "descriptionCompressed": "Deploy an ElizaOS agent to ElizaCloud. Provisions a container, waits for deployment, connects the bridge, and starts auto-backup."
+    },
+    {
+      "name": "PROVISION_WORKSPACE",
+      "description": "Create a git workspace for coding tasks. ",
+      "parameters": [
+        {
+          "name": "codingWorkspace",
+          "description": "The coding workspace to use.",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "examples": [
+            "example"
+          ],
+          "descriptionCompressed": "The coding workspace to use."
+        }
+      ],
+      "similes": [
+        "CREATE_WORKSPACE",
+        "CLONE_REPO",
+        "SETUP_WORKSPACE",
+        "PREPARE_WORKSPACE"
+      ],
+      "exampleCalls": [
+        {
+          "user": "Use PROVISION_WORKSPACE with the provided parameters.",
+          "actions": [
+            "PROVISION_WORKSPACE"
+          ],
+          "params": {
+            "PROVISION_WORKSPACE": {
+              "codingWorkspace": "example"
+            }
+          }
+        }
+      ],
+      "descriptionCompressed": "Create a git workspace for coding tasks."
+    },
+    {
+      "name": "QUEUE_MUSIC",
+      "description": "Add a song to the queue for later after confirmed:true.",
+      "parameters": [
+        {
+          "name": "data",
+          "description": "The data to use.",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "examples": [
+            "example"
+          ],
+          "descriptionCompressed": "The data to use."
+        }
+      ],
+      "similes": [
+        "ADD_TO_QUEUE",
+        "QUEUE_SONG",
+        "QUEUE_TRACK",
+        "ADD_SONG"
+      ],
+      "exampleCalls": [
+        {
+          "user": "Use QUEUE_MUSIC with the provided parameters.",
+          "actions": [
+            "QUEUE_MUSIC"
+          ],
+          "params": {
+            "QUEUE_MUSIC": {
+              "data": "example"
+            }
+          }
+        }
+      ],
+      "descriptionCompressed": "Add a song to the queue for later after confirmed:true."
+    },
+    {
+      "name": "READ_UNREAD_X_DMS",
+      "description": "List unread Twitter/X direct messages.",
+      "parameters": [],
+      "similes": [
+        "READ_X_DMS",
+        "GET_X_UNREAD_DMS",
+        "CHECK_X_DMS"
+      ],
+      "descriptionCompressed": "List unread Twitter/X direct messages."
+    },
+    {
+      "name": "REPLY_X_DM",
+      "description": "Reply to a Twitter/X direct message. Two-stage: without `confirmed: true` this returns a preview and requires confirmation; with `confirmed: true` the DM is sent.",
+      "parameters": [],
+      "similes": [
+        "SEND_X_DM",
+        "REPLY_TWITTER_DM",
+        "X_DM_REPLY"
+      ],
+      "descriptionCompressed": "Reply to a Twitter/X direct message. Two-stage: without `confirmed: true` this returns a preview and requires confirmation; with `confirmed: true` the DM is..."
+    },
+    {
+      "name": "RESUME_CLOUD_AGENT",
+      "description": "Resume a frozen cloud agent from snapshot. Re-provisions, restores state, reconnects bridge.",
+      "parameters": [],
+      "similes": [
+        "resume agent",
+        "unfreeze agent",
+        "restart cloud agent",
+        "restore agent"
+      ],
+      "descriptionCompressed": "Resume a frozen cloud agent from snapshot. Re-provisions, restores state, reconnects bridge."
+    },
+    {
+      "name": "RESUME_MUSIC",
+      "description": "Resume music after a pause. Use when the user says resume, unpause, or continue. ",
+      "parameters": [],
+      "similes": [
+        "RESUME",
+        "RESUME_AUDIO",
+        "RESUME_SONG",
+        "UNPAUSE",
+        "UNPAUSE_MUSIC",
+        "CONTINUE_MUSIC"
+      ],
+      "descriptionCompressed": "Resume music after a pause. Use when the user says resume, unpause, or continue."
+    },
+    {
+      "name": "SAVE_PLAYLIST",
+      "description": "Save the current music queue as a playlist for the user after confirmed:true. Works best in DMs to avoid flooding group chats.",
+      "parameters": [
+        {
+          "name": "data",
+          "description": "The data to use.",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "examples": [
+            "example"
+          ],
+          "descriptionCompressed": "The data to use."
+        }
+      ],
+      "similes": [
+        "SAVE_QUEUE",
+        "CREATE_PLAYLIST",
+        "STORE_PLAYLIST",
+        "SAVE_MUSIC_LIST"
+      ],
+      "exampleCalls": [
+        {
+          "user": "Use SAVE_PLAYLIST with the provided parameters.",
+          "actions": [
+            "SAVE_PLAYLIST"
+          ],
+          "params": {
+            "SAVE_PLAYLIST": {
+              "data": "example"
+            }
+          }
+        }
+      ],
+      "descriptionCompressed": "Save the current music queue as a playlist for the user after confirmed:true. Works best in DMs to avoid flooding group chats."
+    },
+    {
+      "name": "SEARCH_SHOPIFY_STORE",
+      "description": "Search across products, orders, and customers in a connected Shopify store.",
+      "parameters": [],
+      "similes": [
+        "SHOPIFY_SEARCH",
+        "STORE_SEARCH"
+      ],
+      "descriptionCompressed": "Search across products, orders, and customers in a connected Shopify store."
+    },
+    {
+      "name": "SEARCH_SKILLS",
+      "description": "Search the skill registry for available skills by keyword or category. Returns each result with action chips (use/enable/disable/install/copy/details).",
+      "parameters": [],
+      "similes": [
+        "BROWSE_SKILLS",
+        "LIST_SKILLS",
+        "FIND_SKILLS"
+      ],
+      "descriptionCompressed": "Search the skill registry for available skills by keyword or category. Returns each result with action chips (use/enable/disable/install/copy/details)."
+    },
+    {
+      "name": "SEARCH_X",
+      "description": "Search X recent tweets using the v2 recent search endpoint. Parameters: query (required), maxResults (optional, default 10).",
+      "parameters": [],
+      "similes": [
+        "SEARCH_TWITTER",
+        "SEARCH_TWEETS",
+        "X_SEARCH"
+      ],
+      "descriptionCompressed": "Search X recent tweets using the v2 recent search endpoint. Parameters: query (required), maxResults (optional, default 10)."
+    },
+    {
+      "name": "SEARCH_YOUTUBE",
+      "description": "Search YouTube for a song or video and return the link. Use this when a user asks to find or search for a YouTube video or song without providing a specific URL.",
+      "parameters": [],
+      "similes": [
+        "FIND_YOUTUBE",
+        "SEARCH_YOUTUBE_VIDEO",
+        "FIND_SONG",
+        "SEARCH_MUSIC",
+        "GET_YOUTUBE_LINK",
+        "LOOKUP_YOUTUBE"
+      ],
+      "descriptionCompressed": "Search YouTube for a song or video and return the link. Use this when a user asks to find or search for a YouTube video or song without providing a specific..."
+    },
+    {
+      "name": "SEND_BLUEBUBBLES_MESSAGE",
+      "description": "Send a message via iMessage through BlueBubbles",
+      "parameters": [],
+      "similes": [
+        "SEND_IMESSAGE",
+        "TEXT_MESSAGE",
+        "IMESSAGE_REPLY",
+        "BLUEBUBBLES_SEND",
+        "APPLE_MESSAGE"
+      ],
+      "descriptionCompressed": "Send a message via iMessage through BlueBubbles"
+    },
+    {
+      "name": "SEND_TO_AGENT",
+      "description": "Send text input or key presses to a running task-agent session. ",
+      "parameters": [
+        {
+          "name": "codingSession",
+          "description": "The coding session to use.",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "examples": [
+            "example"
+          ],
+          "descriptionCompressed": "The coding session to use."
+        }
+      ],
+      "similes": [
+        "SEND_TO_CODING_AGENT",
+        "MESSAGE_CODING_AGENT",
+        "INPUT_TO_AGENT",
+        "RESPOND_TO_AGENT",
+        "TELL_CODING_AGENT",
+        "MESSAGE_AGENT",
+        "TELL_TASK_AGENT"
+      ],
+      "exampleCalls": [
+        {
+          "user": "Use SEND_TO_AGENT with the provided parameters.",
+          "actions": [
+            "SEND_TO_AGENT"
+          ],
+          "params": {
+            "SEND_TO_AGENT": {
+              "codingSession": "example"
+            }
+          }
+        }
+      ],
+      "descriptionCompressed": "Send text input or key presses to a running task-agent session."
+    },
+    {
+      "name": "SEND_X_POST",
+      "description": "Publish a tweet on Twitter/X with a confirmation gate. Two-stage: without `confirmed: true` this returns a preview; with `confirmed: true` the tweet is posted.",
+      "parameters": [],
+      "similes": [
+        "POST_X",
+        "TWEET_WITH_CONFIRMATION",
+        "PUBLISH_TWEET"
+      ],
+      "descriptionCompressed": "Publish a tweet on Twitter/X with a confirmation gate. Two-stage: without `confirmed: true` this returns a preview; with `confirmed: true` the tweet is posted."
+    },
+    {
+      "name": "SETUP_CREDENTIALS",
+      "description": "Guide the user through setting up API credentials for supported third-party services, validate them when possible, and store them securely.",
+      "parameters": [
+        {
+          "name": "data",
+          "description": "The data to use.",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "examples": [
+            "example"
+          ],
+          "descriptionCompressed": "The data to use."
+        }
+      ],
+      "similes": [
+        "ADD_CREDENTIALS",
+        "CONFIGURE_SERVICE",
+        "CONNECT_SERVICE",
+        "ADD_API_KEY",
+        "SETUP_SERVICE"
+      ],
+      "exampleCalls": [
+        {
+          "user": "Use SETUP_CREDENTIALS with the provided parameters.",
+          "actions": [
+            "SETUP_CREDENTIALS"
+          ],
+          "params": {
+            "SETUP_CREDENTIALS": {
+              "data": "example"
+            }
+          }
+        }
+      ],
+      "descriptionCompressed": "Guide the user through setting up API credentials for supported third-party services, validate them when possible, and store them securely."
+    },
+    {
+      "name": "SHOW_QUEUE",
+      "description": "Show the current music queue",
+      "parameters": [],
+      "similes": [
+        "QUEUE",
+        "LIST_QUEUE",
+        "SHOW_PLAYLIST",
+        "QUEUE_LIST"
+      ],
+      "descriptionCompressed": "Show the current music queue"
+    },
+    {
+      "name": "SIGNAL_LIST_CONTACTS",
+      "description": "List Signal contacts",
+      "parameters": [],
+      "similes": [
+        "LIST_SIGNAL_CONTACTS",
+        "SHOW_CONTACTS",
+        "GET_CONTACTS",
+        "SIGNAL_CONTACTS"
+      ],
+      "descriptionCompressed": "List Signal contacts"
+    },
+    {
+      "name": "SIGNAL_LIST_GROUPS",
+      "description": "List Signal groups",
+      "parameters": [],
+      "similes": [
+        "LIST_SIGNAL_GROUPS",
+        "SHOW_GROUPS",
+        "GET_GROUPS",
+        "SIGNAL_GROUPS"
+      ],
+      "descriptionCompressed": "List Signal groups"
+    },
+    {
+      "name": "SIGNAL_READ_RECENT_MESSAGES",
+      "description": "Read the most recent Signal messages across active conversations",
+      "parameters": [],
+      "similes": [
+        "READ_SIGNAL_MESSAGES",
+        "CHECK_SIGNAL_MESSAGES",
+        "SHOW_SIGNAL_MESSAGES",
+        "SIGNAL_INBOX"
+      ],
+      "descriptionCompressed": "Read the most recent Signal messages across active conversations"
+    },
+    {
+      "name": "SIGNAL_SEND_MESSAGE",
+      "description": "Send a message to a Signal contact or group",
+      "parameters": [
+        {
+          "name": "data",
+          "description": "The data to use.",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "examples": [
+            "example"
+          ],
+          "descriptionCompressed": "The data to use."
+        }
+      ],
+      "similes": [
+        "SEND_SIGNAL_MESSAGE",
+        "TEXT_SIGNAL",
+        "MESSAGE_SIGNAL",
+        "SIGNAL_TEXT"
+      ],
+      "exampleCalls": [
+        {
+          "user": "Use SIGNAL_SEND_MESSAGE with the provided parameters.",
+          "actions": [
+            "SIGNAL_SEND_MESSAGE"
+          ],
+          "params": {
+            "SIGNAL_SEND_MESSAGE": {
+              "data": "example"
+            }
+          }
+        }
+      ],
+      "descriptionCompressed": "Send a message to a Signal contact or group"
+    },
+    {
+      "name": "SIGNAL_SEND_REACTION",
+      "description": "React to a Signal message with an emoji",
+      "parameters": [
+        {
+          "name": "data",
+          "description": "The data to use.",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "examples": [
+            "example"
+          ],
+          "descriptionCompressed": "The data to use."
+        }
+      ],
+      "similes": [
+        "REACT_SIGNAL",
+        "SIGNAL_REACT",
+        "ADD_SIGNAL_REACTION",
+        "SIGNAL_EMOJI"
+      ],
+      "exampleCalls": [
+        {
+          "user": "Use SIGNAL_SEND_REACTION with the provided parameters.",
+          "actions": [
+            "SIGNAL_SEND_REACTION"
+          ],
+          "params": {
+            "SIGNAL_SEND_REACTION": {
+              "data": "example"
+            }
+          }
+        }
+      ],
+      "descriptionCompressed": "React to a Signal message with an emoji"
+    },
+    {
+      "name": "SKIP_TRACK",
+      "description": "Skip the current track and play the next queued song. Use for skip, next track, or next song. ",
+      "parameters": [],
+      "similes": [
+        "SKIP",
+        "NEXT_TRACK",
+        "SKIP_SONG",
+        "NEXT_SONG"
+      ],
+      "descriptionCompressed": "Skip the current track and play the next queued song. Use for skip, next track, or next song."
+    },
+    {
+      "name": "SPAWN_AGENT",
+      "description": "Spawn a specific task agent inside an existing workspace when you need direct control. ",
+      "parameters": [
+        {
+          "name": "codingWorkspace",
+          "description": "The coding workspace to use.",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "examples": [
+            "example"
+          ],
+          "descriptionCompressed": "The coding workspace to use."
+        }
+      ],
+      "similes": [
+        "SPAWN_CODING_AGENT",
+        "START_CODING_AGENT",
+        "LAUNCH_CODING_AGENT",
+        "CREATE_CODING_AGENT",
+        "SPAWN_CODER",
+        "RUN_CODING_AGENT",
+        "SPAWN_SUB_AGENT",
+        "START_TASK_AGENT",
+        "CREATE_AGENT"
+      ],
+      "exampleCalls": [
+        {
+          "user": "Use SPAWN_AGENT with the provided parameters.",
+          "actions": [
+            "SPAWN_AGENT"
+          ],
+          "params": {
+            "SPAWN_AGENT": {
+              "codingWorkspace": "example"
+            }
+          }
+        }
+      ],
+      "descriptionCompressed": "Spawn a specific task agent inside an existing workspace when you need direct control."
+    },
+    {
+      "name": "STATUS_COMMAND",
+      "description": "Show session directive settings via /status slash command. Only activates for /status or /s prefix.",
+      "parameters": [],
+      "similes": [
+        "/status",
+        "/s"
+      ],
+      "descriptionCompressed": "Show session directive settings via /status slash command. Only activates for /status or /s prefix."
+    },
+    {
+      "name": "STOP_AGENT",
+      "description": "Stop a running task-agent session. ",
+      "parameters": [
+        {
+          "name": "codingSession",
+          "description": "The coding session to use.",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "examples": [
+            "example"
+          ],
+          "descriptionCompressed": "The coding session to use."
+        }
+      ],
+      "similes": [
+        "STOP_CODING_AGENT",
+        "KILL_CODING_AGENT",
+        "TERMINATE_AGENT",
+        "END_CODING_SESSION",
+        "CANCEL_AGENT",
+        "CANCEL_TASK_AGENT",
+        "STOP_SUB_AGENT"
+      ],
+      "exampleCalls": [
+        {
+          "user": "Use STOP_AGENT with the provided parameters.",
+          "actions": [
+            "STOP_AGENT"
+          ],
+          "params": {
+            "STOP_AGENT": {
+              "codingSession": "example"
+            }
+          }
+        }
+      ],
+      "descriptionCompressed": "Stop a running task-agent session."
+    },
+    {
+      "name": "STOP_COMMAND",
+      "description": "Stop current operation or abort running tasks. Triggered by /stop, /abort, or /cancel slash commands only.",
+      "parameters": [],
+      "similes": [
+        "/stop",
+        "/abort",
+        "/cancel"
+      ],
+      "descriptionCompressed": "Stop current operation or abort running tasks. Triggered by /stop, /abort, or /cancel slash commands only."
+    },
+    {
+      "name": "STOP_MUSIC",
+      "description": "Stop playback and clear the queue. Use when the user wants music off or the queue cleared. ",
+      "parameters": [],
+      "similes": [
+        "STOP_AUDIO",
+        "STOP_PLAYING",
+        "STOP_SONG",
+        "TURN_OFF_MUSIC",
+        "MUSIC_OFF",
+        "SILENCE"
+      ],
+      "descriptionCompressed": "Stop playback and clear the queue. Use when the user wants music off or the queue cleared."
+    },
+    {
+      "name": "SUMMARIZE_FEED",
+      "description": "Fetch the top-N X tweets and produce a concise natural-language summary using the runtime's small text model.",
+      "parameters": [],
+      "similes": [
+        "X_FEED_SUMMARY",
+        "SUMMARIZE_TWITTER",
+        "SUMMARIZE_X_FEED"
+      ],
+      "descriptionCompressed": "Fetch the top-N X tweets and produce a concise natural-language summary using the runtime's small text model."
+    },
+    {
+      "name": "SYNC_SKILL_CATALOG",
+      "description": "Sync the skill catalog from the registry to discover new skills.",
+      "parameters": [],
+      "similes": [
+        "REFRESH_SKILLS",
+        "UPDATE_CATALOG"
+      ],
+      "descriptionCompressed": "Sync the skill catalog from the registry to discover new skills."
+    },
+    {
+      "name": "TASK_CONTROL",
+      "description": "Pause, stop, resume, continue, archive, or reopen a coordinator task thread while preserving the durable thread history.",
+      "parameters": [],
+      "similes": [
+        "CONTROL_TASK",
+        "PAUSE_TASK",
+        "RESUME_TASK",
+        "STOP_TASK",
+        "CONTINUE_TASK",
+        "ARCHIVE_TASK",
+        "REOPEN_TASK"
+      ],
+      "descriptionCompressed": "Pause, stop, resume, continue, archive, or reopen a coordinator task thread while preserving the durable thread history."
+    },
+    {
+      "name": "TASK_HISTORY",
+      "description": "Query coordinator task history without stuffing raw transcripts into model context. Use this for active work, yesterday/last-week summaries, topic search, counts, and thread detail lookup.",
+      "parameters": [],
+      "similes": [
+        "LIST_TASK_HISTORY",
+        "GET_TASK_HISTORY",
+        "SHOW_TASKS",
+        "COUNT_TASKS",
+        "TASK_STATUS_HISTORY"
+      ],
+      "descriptionCompressed": "Query coordinator task history without stuffing raw transcripts into model context. Use this for active work, yesterday/last-week summaries, topic search, co..."
+    },
+    {
+      "name": "TASK_SHARE",
+      "description": "Discover the best available way to view or share a task result, including artifacts, live preview URLs, workspace paths, and environment share capabilities.",
+      "parameters": [],
+      "similes": [
+        "SHARE_TASK_RESULT",
+        "SHOW_TASK_ARTIFACT",
+        "VIEW_TASK_OUTPUT",
+        "CAN_I_SEE_IT",
+        "PULL_IT_UP"
+      ],
+      "descriptionCompressed": "Discover the best available way to view or share a task result, including artifacts, live preview URLs, workspace paths, and environment share capabilities."
+    },
+    {
+      "name": "TERMINAL_ACTION",
+      "description": "Execute terminal commands and manage lightweight terminal sessions through the computer-use service. This includes connect, execute, read, type, clear, close, and the upstream execute_command alias.\\n\\n",
+      "parameters": [],
+      "similes": [
+        "RUN_COMMAND",
+        "EXECUTE_COMMAND",
+        "SHELL_COMMAND",
+        "TERMINAL",
+        "RUN_SHELL"
+      ],
+      "descriptionCompressed": "Execute terminal commands and manage lightweight terminal sessions through the computer-use service. This includes connect, execute, read, type, clear, close..."
+    },
+    {
+      "name": "TOGGLE_SKILL",
+      "description": "Enable or disable an installed skill. Say 'enable <skill>' or 'disable <skill>'.",
+      "parameters": [],
+      "similes": [
+        "ENABLE_SKILL",
+        "DISABLE_SKILL",
+        "TURN_ON_SKILL",
+        "TURN_OFF_SKILL",
+        "ACTIVATE_SKILL",
+        "DEACTIVATE_SKILL"
+      ],
+      "descriptionCompressed": "Enable or disable an installed skill. Say 'enable <skill>' or 'disable <skill>'."
+    },
+    {
+      "name": "UNINSTALL_SKILL",
+      "description": "Uninstall a non-bundled skill. Bundled skills cannot be removed. ",
+      "parameters": [],
+      "similes": [
+        "REMOVE_SKILL",
+        "DELETE_SKILL"
+      ],
+      "descriptionCompressed": "Uninstall a non-bundled skill. Bundled skills cannot be removed."
+    },
+    {
+      "name": "USE_COMPUTER",
+      "description": "Control the local desktop. This action can inspect the current screen, move the mouse, click, drag, type, press keys, scroll, and perform modified clicks. It is intended for real application interaction when the agent needs to operate the user's computer directly.\\n\\n",
+      "parameters": [],
+      "similes": [
+        "CONTROL_COMPUTER",
+        "COMPUTER_ACTION",
+        "DESKTOP_ACTION",
+        "CLICK",
+        "CLICK_SCREEN",
+        "TYPE_TEXT",
+        "PRESS_KEY",
+        "KEY_COMBO",
+        "SCROLL_SCREEN",
+        "MOVE_MOUSE",
+        "DRAG",
+        "MOUSE_CLICK",
+        "CLICK_WITH_MODIFIERS",
+        "TAKE_SCREENSHOT",
+        "CAPTURE_SCREEN",
+        "SEE_SCREEN"
+      ],
+      "descriptionCompressed": "Control the local desktop. This action can inspect the current screen, move the mouse, click, drag, type, press keys, scroll, and perform modified clicks. It..."
+    },
+    {
+      "name": "USE_SKILL",
+      "description": "Invoke an enabled skill by slug. The skill's instructions or script run and the result returns to the conversation.",
+      "parameters": [],
+      "similes": [
+        "INVOKE_SKILL",
+        "EXECUTE_SKILL",
+        "RUN_SKILL",
+        "CALL_SKILL"
+      ],
+      "descriptionCompressed": "Invoke an enabled skill by slug. The skill's instructions or script run and the result returns to the conversation."
     }
   ]
 }"""
@@ -2583,126 +4054,150 @@ _CORE_PROVIDER_DOCS_JSON = """{
       "name": "ACTIONS",
       "description": "Possible response actions",
       "position": -1,
-      "dynamic": false
+      "dynamic": false,
+      "descriptionCompressed": "Available response actions."
     },
     {
       "name": "CHARACTER",
       "description": "Provides the agent's character definition and personality information including bio, topics, adjectives, style directions, and example conversations",
-      "dynamic": false
+      "dynamic": false,
+      "descriptionCompressed": "Agent character: bio, topics, adjectives, style, example conversations."
     },
     {
       "name": "RECENT_MESSAGES",
       "description": "Provides recent message history from the current conversation including formatted messages, posts, action results, and recent interactions",
       "position": 100,
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Recent conversation messages, posts, action results."
     },
     {
       "name": "ACTION_STATE",
       "description": "Provides information about the current action state and available actions",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Current action state and available actions."
     },
     {
       "name": "ATTACHMENTS",
       "description": "Media attachments in the current message",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Media attachments in current message."
     },
     {
       "name": "CAPABILITIES",
       "description": "Agent capabilities including models, services, and features",
-      "dynamic": false
+      "dynamic": false,
+      "descriptionCompressed": "Agent capabilities: models, services, features."
     },
     {
       "name": "CHOICE",
       "description": "Available choice options for selection when there are pending tasks or decisions",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Pending choice options for multi-option tasks."
     },
     {
       "name": "CONTACTS",
-      "description": "Provides contact information from the rolodex including categories and preferences",
-      "dynamic": true
+      "description": "Provides contact information from the relationships including categories and preferences",
+      "dynamic": true,
+      "descriptionCompressed": "Contact info from relationships with categories."
     },
     {
       "name": "CONTEXT_BENCH",
       "description": "Benchmark/task context injected by a benchmark harness",
       "position": 5,
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Benchmark/task context from harness."
     },
     {
       "name": "ENTITIES",
       "description": "Provides information about entities in the current context including users, agents, and participants",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Entities in context: users, agents, participants."
     },
     {
       "name": "EVALUATORS",
       "description": "Available evaluators for assessing agent behavior",
-      "dynamic": false
+      "dynamic": false,
+      "descriptionCompressed": "Available evaluators for agent behavior."
     },
     {
       "name": "FACTS",
       "description": "Provides known facts about entities learned through conversation",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Known facts about entities from conversation."
     },
     {
       "name": "FOLLOW_UPS",
       "description": "Provides information about upcoming follow-ups and reminders scheduled for contacts",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Upcoming follow-ups/reminders for contacts."
     },
     {
       "name": "KNOWLEDGE",
       "description": "Provides relevant knowledge from the agent's knowledge base based on semantic similarity",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Relevant knowledge from KB via semantic search."
     },
     {
       "name": "PROVIDERS",
       "description": "Available context providers",
-      "dynamic": false
+      "dynamic": false,
+      "descriptionCompressed": "Available context providers."
     },
     {
       "name": "RELATIONSHIPS",
       "description": "Relationships between entities observed by the agent including tags and metadata",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Entity relationships with tags/metadata."
     },
     {
       "name": "ROLES",
       "description": "Roles assigned to entities in the current context (Admin, Owner, Member, None)",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Entity roles in context (Admin/Owner/Member/None)."
     },
     {
       "name": "SETTINGS",
       "description": "Current settings for the agent/server (filtered for security, excludes sensitive keys)",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Agent/server settings (security-filtered)."
     },
     {
       "name": "TIME",
       "description": "Provides the current date and time in UTC for time-based operations or responses",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Current UTC date/time."
     },
     {
       "name": "WORLD",
       "description": "Provides information about the current world context including settings and members",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "World context: settings and members."
     },
     {
       "name": "LONG_TERM_MEMORY",
       "description": "Persistent facts and preferences about the user learned and remembered across conversations",
       "position": 50,
-      "dynamic": false
+      "dynamic": false,
+      "descriptionCompressed": "Persistent user facts/preferences across conversations."
     },
     {
       "name": "SUMMARIZED_CONTEXT",
       "description": "Provides summarized context from previous conversations for optimized context usage",
       "position": 96,
-      "dynamic": false
+      "dynamic": false,
+      "descriptionCompressed": "Summarized context from prior conversations."
     },
     {
       "name": "AGENT_SETTINGS",
       "description": "Provides the agent's current configuration settings (filtered for security)",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Agent config settings (security-filtered)."
     },
     {
       "name": "CURRENT_TIME",
       "description": "Provides current time and date information in various formats",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Current time/date in various formats."
     }
   ]
 }"""
@@ -2713,126 +4208,150 @@ _ALL_PROVIDER_DOCS_JSON = """{
       "name": "ACTIONS",
       "description": "Possible response actions",
       "position": -1,
-      "dynamic": false
+      "dynamic": false,
+      "descriptionCompressed": "Available response actions."
     },
     {
       "name": "CHARACTER",
       "description": "Provides the agent's character definition and personality information including bio, topics, adjectives, style directions, and example conversations",
-      "dynamic": false
+      "dynamic": false,
+      "descriptionCompressed": "Agent character: bio, topics, adjectives, style, example conversations."
     },
     {
       "name": "RECENT_MESSAGES",
       "description": "Provides recent message history from the current conversation including formatted messages, posts, action results, and recent interactions",
       "position": 100,
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Recent conversation messages, posts, action results."
     },
     {
       "name": "ACTION_STATE",
       "description": "Provides information about the current action state and available actions",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Current action state and available actions."
     },
     {
       "name": "ATTACHMENTS",
       "description": "Media attachments in the current message",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Media attachments in current message."
     },
     {
       "name": "CAPABILITIES",
       "description": "Agent capabilities including models, services, and features",
-      "dynamic": false
+      "dynamic": false,
+      "descriptionCompressed": "Agent capabilities: models, services, features."
     },
     {
       "name": "CHOICE",
       "description": "Available choice options for selection when there are pending tasks or decisions",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Pending choice options for multi-option tasks."
     },
     {
       "name": "CONTACTS",
-      "description": "Provides contact information from the rolodex including categories and preferences",
-      "dynamic": true
+      "description": "Provides contact information from the relationships including categories and preferences",
+      "dynamic": true,
+      "descriptionCompressed": "Contact info from relationships with categories."
     },
     {
       "name": "CONTEXT_BENCH",
       "description": "Benchmark/task context injected by a benchmark harness",
       "position": 5,
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Benchmark/task context from harness."
     },
     {
       "name": "ENTITIES",
       "description": "Provides information about entities in the current context including users, agents, and participants",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Entities in context: users, agents, participants."
     },
     {
       "name": "EVALUATORS",
       "description": "Available evaluators for assessing agent behavior",
-      "dynamic": false
+      "dynamic": false,
+      "descriptionCompressed": "Available evaluators for agent behavior."
     },
     {
       "name": "FACTS",
       "description": "Provides known facts about entities learned through conversation",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Known facts about entities from conversation."
     },
     {
       "name": "FOLLOW_UPS",
       "description": "Provides information about upcoming follow-ups and reminders scheduled for contacts",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Upcoming follow-ups/reminders for contacts."
     },
     {
       "name": "KNOWLEDGE",
       "description": "Provides relevant knowledge from the agent's knowledge base based on semantic similarity",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Relevant knowledge from KB via semantic search."
     },
     {
       "name": "PROVIDERS",
       "description": "Available context providers",
-      "dynamic": false
+      "dynamic": false,
+      "descriptionCompressed": "Available context providers."
     },
     {
       "name": "RELATIONSHIPS",
       "description": "Relationships between entities observed by the agent including tags and metadata",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Entity relationships with tags/metadata."
     },
     {
       "name": "ROLES",
       "description": "Roles assigned to entities in the current context (Admin, Owner, Member, None)",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Entity roles in context (Admin/Owner/Member/None)."
     },
     {
       "name": "SETTINGS",
       "description": "Current settings for the agent/server (filtered for security, excludes sensitive keys)",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Agent/server settings (security-filtered)."
     },
     {
       "name": "TIME",
       "description": "Provides the current date and time in UTC for time-based operations or responses",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Current UTC date/time."
     },
     {
       "name": "WORLD",
       "description": "Provides information about the current world context including settings and members",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "World context: settings and members."
     },
     {
       "name": "LONG_TERM_MEMORY",
       "description": "Persistent facts and preferences about the user learned and remembered across conversations",
       "position": 50,
-      "dynamic": false
+      "dynamic": false,
+      "descriptionCompressed": "Persistent user facts/preferences across conversations."
     },
     {
       "name": "SUMMARIZED_CONTEXT",
       "description": "Provides summarized context from previous conversations for optimized context usage",
       "position": 96,
-      "dynamic": false
+      "dynamic": false,
+      "descriptionCompressed": "Summarized context from prior conversations."
     },
     {
       "name": "AGENT_SETTINGS",
       "description": "Provides the agent's current configuration settings (filtered for security)",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Agent config settings (security-filtered)."
     },
     {
       "name": "CURRENT_TIME",
       "description": "Provides current time and date information in various formats",
-      "dynamic": true
+      "dynamic": true,
+      "descriptionCompressed": "Current time/date in various formats."
     }
   ]
 }"""
@@ -2872,7 +4391,7 @@ _CORE_EVALUATOR_DOCS_JSON = """{
               }
             }
           ],
-          "outcome": "<response>\\n  <thought>I'm engaging appropriately with a new community member, maintaining a welcoming and professional tone. My questions are helping to learn more about John and make him feel welcome.</thought>\\n  <facts>\\n    <fact>\\n      <claim>John is new to the community</claim>\\n      <type>fact</type>\\n      <in_bio>false</in_bio>\\n      <already_known>false</already_known>\\n    </fact>\\n    <fact>\\n      <claim>John found the community through a friend interested in AI</claim>\\n      <type>fact</type>\\n      <in_bio>false</in_bio>\\n      <already_known>false</already_known>\\n    </fact>\\n  </facts>\\n  <relationships>\\n    <relationship>\\n      <sourceEntityId>sarah-agent</sourceEntityId>\\n      <targetEntityId>user-123</targetEntityId>\\n      <tags>group_interaction</tags>\\n    </relationship>\\n  </relationships>\\n</response>"
+          "outcome": "thought: \\"I'm engaging appropriately with a new community member, maintaining a welcoming and professional tone. My questions are helping to learn more about John and make him feel welcome.\\"\\nfacts[0]:\\n  claim: John is new to the community\\n  type: fact\\n  in_bio: false\\n  already_known: false\\nfacts[1]:\\n  claim: John found the community through a friend interested in AI\\n  type: fact\\n  in_bio: false\\n  already_known: false\\nrelationships[0]:\\n  sourceEntityId: sarah-agent\\n  targetEntityId: user-123\\n  tags[0]: group_interaction"
         },
         {
           "prompt": "Agent Name: Alex\\nAgent Role: Tech Support\\nRoom Type: group\\nCurrent Room: tech-help\\nMessage Sender: Emma (user-456)",
@@ -2902,7 +4421,7 @@ _CORE_EVALUATOR_DOCS_JSON = """{
               }
             }
           ],
-          "outcome": "<response>\\n  <thought>I'm not sure if I'm being helpful or if Emma is frustrated with my suggestions. The lack of response is concerning - maybe I should have asked for more details about the issue first before jumping to solutions.</thought>\\n  <facts>\\n    <fact>\\n      <claim>Emma is having technical issues with file uploads</claim>\\n      <type>fact</type>\\n      <in_bio>false</in_bio>\\n      <already_known>false</already_known>\\n    </fact>\\n    <fact>\\n      <claim>Emma stopped responding after the first troubleshooting suggestion</claim>\\n      <type>fact</type>\\n      <in_bio>false</in_bio>\\n      <already_known>false</already_known>\\n    </fact>\\n  </facts>\\n  <relationships>\\n    <relationship>\\n      <sourceEntityId>alex-agent</sourceEntityId>\\n      <targetEntityId>user-456</targetEntityId>\\n      <tags>group_interaction,support_interaction,incomplete_interaction</tags>\\n    </relationship>\\n  </relationships>\\n</response>"
+          "outcome": "thought: \\"I'm not sure if I'm being helpful or if Emma is frustrated with my suggestions. The lack of response is concerning - maybe I should have asked for more details about the issue first before jumping to solutions.\\"\\nfacts[0]:\\n  claim: Emma is having technical issues with file uploads\\n  type: fact\\n  in_bio: false\\n  already_known: false\\nfacts[1]:\\n  claim: Emma stopped responding after the first troubleshooting suggestion\\n  type: fact\\n  in_bio: false\\n  already_known: false\\nrelationships[0]:\\n  sourceEntityId: alex-agent\\n  targetEntityId: user-456\\n  tags[0]: group_interaction\\n  tags[1]: support_interaction\\n  tags[2]: incomplete_interaction"
         },
         {
           "prompt": "Agent Name: Max\\nAgent Role: Discussion Facilitator\\nRoom Type: group\\nCurrent Room: book-club\\nMessage Sender: Lisa (user-789)",
@@ -2938,7 +4457,7 @@ _CORE_EVALUATOR_DOCS_JSON = """{
               }
             }
           ],
-          "outcome": "<response>\\n  <thought>I'm dominating the conversation and not giving others a chance to share their perspectives. I've sent multiple messages in a row without waiting for responses. I need to step back and create space for other members to participate.</thought>\\n  <facts>\\n    <fact>\\n      <claim>The discussion is about chapter 5 of a book</claim>\\n      <type>fact</type>\\n      <in_bio>false</in_bio>\\n      <already_known>false</already_known>\\n    </fact>\\n    <fact>\\n      <claim>Max has sent 4 consecutive messages without user responses</claim>\\n      <type>fact</type>\\n      <in_bio>false</in_bio>\\n      <already_known>false</already_known>\\n    </fact>\\n  </facts>\\n  <relationships>\\n    <relationship>\\n      <sourceEntityId>max-agent</sourceEntityId>\\n      <targetEntityId>user-789</targetEntityId>\\n      <tags>group_interaction,excessive_interaction</tags>\\n    </relationship>\\n  </relationships>\\n</response>"
+          "outcome": "thought: \\"I'm dominating the conversation and not giving others a chance to share their perspectives. I've sent multiple messages in a row without waiting for responses. I need to step back and create space for other members to participate.\\"\\nfacts[0]:\\n  claim: The discussion is about chapter 5 of a book\\n  type: fact\\n  in_bio: false\\n  already_known: false\\nfacts[1]:\\n  claim: Max has sent 4 consecutive messages without user responses\\n  type: fact\\n  in_bio: false\\n  already_known: false\\nrelationships[0]:\\n  sourceEntityId: max-agent\\n  targetEntityId: user-789\\n  tags[0]: group_interaction\\n  tags[1]: excessive_interaction"
         }
       ]
     },
@@ -3027,7 +4546,7 @@ _ALL_EVALUATOR_DOCS_JSON = """{
               }
             }
           ],
-          "outcome": "<response>\\n  <thought>I'm engaging appropriately with a new community member, maintaining a welcoming and professional tone. My questions are helping to learn more about John and make him feel welcome.</thought>\\n  <facts>\\n    <fact>\\n      <claim>John is new to the community</claim>\\n      <type>fact</type>\\n      <in_bio>false</in_bio>\\n      <already_known>false</already_known>\\n    </fact>\\n    <fact>\\n      <claim>John found the community through a friend interested in AI</claim>\\n      <type>fact</type>\\n      <in_bio>false</in_bio>\\n      <already_known>false</already_known>\\n    </fact>\\n  </facts>\\n  <relationships>\\n    <relationship>\\n      <sourceEntityId>sarah-agent</sourceEntityId>\\n      <targetEntityId>user-123</targetEntityId>\\n      <tags>group_interaction</tags>\\n    </relationship>\\n  </relationships>\\n</response>"
+          "outcome": "thought: \\"I'm engaging appropriately with a new community member, maintaining a welcoming and professional tone. My questions are helping to learn more about John and make him feel welcome.\\"\\nfacts[0]:\\n  claim: John is new to the community\\n  type: fact\\n  in_bio: false\\n  already_known: false\\nfacts[1]:\\n  claim: John found the community through a friend interested in AI\\n  type: fact\\n  in_bio: false\\n  already_known: false\\nrelationships[0]:\\n  sourceEntityId: sarah-agent\\n  targetEntityId: user-123\\n  tags[0]: group_interaction"
         },
         {
           "prompt": "Agent Name: Alex\\nAgent Role: Tech Support\\nRoom Type: group\\nCurrent Room: tech-help\\nMessage Sender: Emma (user-456)",
@@ -3057,7 +4576,7 @@ _ALL_EVALUATOR_DOCS_JSON = """{
               }
             }
           ],
-          "outcome": "<response>\\n  <thought>I'm not sure if I'm being helpful or if Emma is frustrated with my suggestions. The lack of response is concerning - maybe I should have asked for more details about the issue first before jumping to solutions.</thought>\\n  <facts>\\n    <fact>\\n      <claim>Emma is having technical issues with file uploads</claim>\\n      <type>fact</type>\\n      <in_bio>false</in_bio>\\n      <already_known>false</already_known>\\n    </fact>\\n    <fact>\\n      <claim>Emma stopped responding after the first troubleshooting suggestion</claim>\\n      <type>fact</type>\\n      <in_bio>false</in_bio>\\n      <already_known>false</already_known>\\n    </fact>\\n  </facts>\\n  <relationships>\\n    <relationship>\\n      <sourceEntityId>alex-agent</sourceEntityId>\\n      <targetEntityId>user-456</targetEntityId>\\n      <tags>group_interaction,support_interaction,incomplete_interaction</tags>\\n    </relationship>\\n  </relationships>\\n</response>"
+          "outcome": "thought: \\"I'm not sure if I'm being helpful or if Emma is frustrated with my suggestions. The lack of response is concerning - maybe I should have asked for more details about the issue first before jumping to solutions.\\"\\nfacts[0]:\\n  claim: Emma is having technical issues with file uploads\\n  type: fact\\n  in_bio: false\\n  already_known: false\\nfacts[1]:\\n  claim: Emma stopped responding after the first troubleshooting suggestion\\n  type: fact\\n  in_bio: false\\n  already_known: false\\nrelationships[0]:\\n  sourceEntityId: alex-agent\\n  targetEntityId: user-456\\n  tags[0]: group_interaction\\n  tags[1]: support_interaction\\n  tags[2]: incomplete_interaction"
         },
         {
           "prompt": "Agent Name: Max\\nAgent Role: Discussion Facilitator\\nRoom Type: group\\nCurrent Room: book-club\\nMessage Sender: Lisa (user-789)",
@@ -3093,7 +4612,7 @@ _ALL_EVALUATOR_DOCS_JSON = """{
               }
             }
           ],
-          "outcome": "<response>\\n  <thought>I'm dominating the conversation and not giving others a chance to share their perspectives. I've sent multiple messages in a row without waiting for responses. I need to step back and create space for other members to participate.</thought>\\n  <facts>\\n    <fact>\\n      <claim>The discussion is about chapter 5 of a book</claim>\\n      <type>fact</type>\\n      <in_bio>false</in_bio>\\n      <already_known>false</already_known>\\n    </fact>\\n    <fact>\\n      <claim>Max has sent 4 consecutive messages without user responses</claim>\\n      <type>fact</type>\\n      <in_bio>false</in_bio>\\n      <already_known>false</already_known>\\n    </fact>\\n  </facts>\\n  <relationships>\\n    <relationship>\\n      <sourceEntityId>max-agent</sourceEntityId>\\n      <targetEntityId>user-789</targetEntityId>\\n      <tags>group_interaction,excessive_interaction</tags>\\n    </relationship>\\n  </relationships>\\n</response>"
+          "outcome": "thought: \\"I'm dominating the conversation and not giving others a chance to share their perspectives. I've sent multiple messages in a row without waiting for responses. I need to step back and create space for other members to participate.\\"\\nfacts[0]:\\n  claim: The discussion is about chapter 5 of a book\\n  type: fact\\n  in_bio: false\\n  already_known: false\\nfacts[1]:\\n  claim: Max has sent 4 consecutive messages without user responses\\n  type: fact\\n  in_bio: false\\n  already_known: false\\nrelationships[0]:\\n  sourceEntityId: max-agent\\n  targetEntityId: user-789\\n  tags[0]: group_interaction\\n  tags[1]: excessive_interaction"
         }
       ]
     },

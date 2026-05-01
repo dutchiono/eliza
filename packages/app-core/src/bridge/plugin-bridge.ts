@@ -1,7 +1,7 @@
 /**
  * Plugin Bridge
  *
- * This module provides a unified interface to all Milady Capacitor plugins
+ * This module provides a single interface to all Capacitor plugins
  * with platform-specific fallbacks and capability detection.
  *
  * When a native plugin is unavailable, it provides graceful degradation
@@ -11,35 +11,43 @@
 import { Capacitor } from "@capacitor/core";
 import { isElectrobunRuntime } from "./electrobun-runtime";
 import {
+  type ContactsPluginLike,
   type GenericNativePlugin,
   getCameraPlugin,
   getCanvasPlugin,
+  getContactsPlugin,
   getDesktopPlugin,
   getGatewayPlugin,
   getLocationPlugin,
+  getMessagesPlugin,
+  getPhonePlugin,
   getScreenCapturePlugin,
   getSwabblePlugin,
+  getSystemPlugin,
   getTalkModePlugin,
+  type MessagesPluginLike,
+  type PhonePluginLike,
   type SwabblePluginLike,
+  type SystemPluginLike,
   type TalkModePluginLike,
 } from "./native-plugins";
 
 // Platform detection
 const platform = Capacitor.getPlatform();
 const isNative = Capacitor.isNativePlatform();
-const isIOS = platform === "ios";
-const isAndroid = platform === "android";
+const _isIOS = platform === "ios";
+const _isAndroid = platform === "android";
 
-function isElectronPlatform(): boolean {
-  return platform === "electron" || isElectrobunRuntime();
+function isDesktopPlatform(): boolean {
+  return isElectrobunRuntime();
 }
 
-function isWebPlatform(): boolean {
+function _isWebPlatform(): boolean {
   return platform === "web" && !isElectrobunRuntime();
 }
 
-function isMacOSPlatform(): boolean {
-  return isElectronPlatform();
+function _isMacOSPlatform(): boolean {
+  return isDesktopPlatform();
 }
 
 /**
@@ -85,7 +93,23 @@ export interface PluginCapabilities {
   canvas: {
     available: boolean;
   };
-  /** Desktop features (macOS/Electron) */
+  /** Android phone stack */
+  phone: {
+    available: boolean;
+  };
+  /** Android contacts provider */
+  contacts: {
+    available: boolean;
+  };
+  /** Android SMS provider */
+  messages: {
+    available: boolean;
+  };
+  /** Android system role/status bridge */
+  system: {
+    available: boolean;
+  };
+  /** Desktop features (macOS/Electrobun) */
   desktop: {
     available: boolean;
     tray: boolean;
@@ -98,7 +122,7 @@ export interface PluginCapabilities {
  * Get plugin capabilities for the current platform
  */
 export function getPluginCapabilities(): PluginCapabilities {
-  const isElectron = isElectronPlatform();
+  const isDesktop = isDesktopPlatform();
   return {
     gateway: {
       available: true, // Web fallback available
@@ -122,7 +146,7 @@ export function getPluginCapabilities(): PluginCapabilities {
     location: {
       available: hasGeolocation(),
       gps: isNative,
-      background: isNative && !isElectron,
+      background: isNative && !isDesktop,
     },
     screenCapture: {
       available: isNative || hasDisplayMedia(),
@@ -132,11 +156,23 @@ export function getPluginCapabilities(): PluginCapabilities {
     canvas: {
       available: true, // HTML Canvas available on all platforms
     },
+    phone: {
+      available: isNative && platform === "android",
+    },
+    contacts: {
+      available: isNative && platform === "android",
+    },
+    messages: {
+      available: isNative && platform === "android",
+    },
+    system: {
+      available: isNative && platform === "android",
+    },
     desktop: {
-      available: isElectron,
-      tray: isElectron,
-      shortcuts: isElectron,
-      menu: isElectron,
+      available: isDesktop,
+      tray: isDesktop,
+      shortcuts: isDesktop,
+      menu: isDesktop,
     },
   };
 }
@@ -213,9 +249,9 @@ function wrapPlugin<T extends Record<string, unknown>>(
 }
 
 /**
- * The plugin bridge providing access to all Milady plugins
+ * The plugin bridge providing access to all native plugins
  */
-export interface MiladyPlugins {
+export interface ElizaPlugins {
   /** Gateway connection plugin */
   gateway: WrappedPlugin<GenericNativePlugin>;
   /** Voice wake word plugin */
@@ -230,27 +266,35 @@ export interface MiladyPlugins {
   screenCapture: WrappedPlugin<GenericNativePlugin>;
   /** Canvas plugin */
   canvas: WrappedPlugin<GenericNativePlugin>;
-  /** Desktop plugin (macOS/Electron) */
+  /** Android phone plugin */
+  phone: WrappedPlugin<PhonePluginLike>;
+  /** Android contacts plugin */
+  contacts: WrappedPlugin<ContactsPluginLike>;
+  /** Android messages plugin */
+  messages: WrappedPlugin<MessagesPluginLike>;
+  /** Android system plugin */
+  system: WrappedPlugin<SystemPluginLike>;
+  /** Desktop plugin (macOS/Electrobun) */
   desktop: WrappedPlugin<GenericNativePlugin>;
   /** Plugin capabilities */
   capabilities: PluginCapabilities;
 }
 
 // Singleton instance
-let pluginsInstance: MiladyPlugins | null = null;
+let pluginsInstance: ElizaPlugins | null = null;
 
 /**
  * Initialize and get the plugins interface
  */
-export function getPlugins(): MiladyPlugins {
+export function getPlugins(): ElizaPlugins {
   if (pluginsInstance) {
-    if (pluginsInstance.desktop.isNative === isElectronPlatform()) {
+    if (pluginsInstance.desktop.isNative === isDesktopPlatform()) {
       return pluginsInstance;
     }
   }
 
   const capabilities = getPluginCapabilities();
-  const isElectron = isElectronPlatform();
+  const isDesktop = isDesktopPlatform();
 
   pluginsInstance = {
     gateway: {
@@ -288,9 +332,29 @@ export function getPlugins(): MiladyPlugins {
       isNative: isNative,
       hasFallback: true,
     },
+    phone: {
+      plugin: wrapPlugin(getPhonePlugin(), "MiladyPhone"),
+      isNative: isNative,
+      hasFallback: capabilities.phone.available,
+    },
+    contacts: {
+      plugin: wrapPlugin(getContactsPlugin(), "MiladyContacts"),
+      isNative: isNative,
+      hasFallback: capabilities.contacts.available,
+    },
+    messages: {
+      plugin: wrapPlugin(getMessagesPlugin(), "MiladyMessages"),
+      isNative: isNative,
+      hasFallback: capabilities.messages.available,
+    },
+    system: {
+      plugin: wrapPlugin(getSystemPlugin(), "MiladySystem"),
+      isNative: isNative,
+      hasFallback: capabilities.system.available,
+    },
     desktop: {
       plugin: wrapPlugin(getDesktopPlugin(), "Desktop"),
-      isNative: isElectron,
+      isNative: isDesktop,
       hasFallback: false,
     },
     capabilities,
@@ -312,6 +376,10 @@ export function isFeatureAvailable(
     | "location"
     | "backgroundLocation"
     | "screenCapture"
+    | "phone"
+    | "contacts"
+    | "messages"
+    | "system"
     | "desktopTray",
 ): boolean {
   const caps = getPluginCapabilities();
@@ -333,20 +401,17 @@ export function isFeatureAvailable(
       return caps.location.background;
     case "screenCapture":
       return caps.screenCapture.available;
+    case "phone":
+      return caps.phone.available;
+    case "contacts":
+      return caps.contacts.available;
+    case "messages":
+      return caps.messages.available;
+    case "system":
+      return caps.system.available;
     case "desktopTray":
       return caps.desktop.tray;
     default:
       return false;
   }
 }
-
-// Export platform info
-export {
-  isAndroid,
-  isElectronPlatform as isElectron,
-  isIOS,
-  isMacOSPlatform as isMacOS,
-  isNative,
-  isWebPlatform as isWeb,
-  platform,
-};

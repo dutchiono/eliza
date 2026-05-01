@@ -11,6 +11,7 @@
  * This is intentionally dependency-free (no zod/yup) to keep builds lightweight.
  */
 
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -453,6 +454,95 @@ function escapePythonTripleQuoted(content) {
   return content.replace(/\\/g, "\\\\").replace(/"""/g, '\\"\\"\\"');
 }
 
+/**
+ * Whitespace-normalize descriptions; truncate to 160 chars (matches Python
+ * `compress_prompt_description`).
+ * @param {string} description
+ * @returns {string}
+ */
+function compressPromptDescription(description) {
+  if (typeof description !== "string" || !description.trim()) {
+    return "";
+  }
+  const compact = description.trim().split(/\s+/).filter(Boolean).join(" ");
+  if (compact.length <= 160) {
+    return compact;
+  }
+  return `${compact.slice(0, 157).replace(/\s+$/, "")}...`;
+}
+
+/**
+ * @param {Record<string, unknown>} action
+ */
+function normalizeActionDoc(action) {
+  if (typeof action.description === "string") {
+    if (
+      action.descriptionCompressed === undefined ||
+      action.descriptionCompressed === ""
+    ) {
+      action.descriptionCompressed = compressPromptDescription(
+        action.description,
+      );
+    }
+  }
+  if (!Array.isArray(action.parameters)) {
+    return;
+  }
+  for (const p of action.parameters) {
+    if (!p || typeof p !== "object") {
+      continue;
+    }
+    const param = /** @type {Record<string, unknown>} */ (p);
+    if (typeof param.description !== "string") {
+      continue;
+    }
+    if (
+      param.descriptionCompressed === undefined ||
+      param.descriptionCompressed === ""
+    ) {
+      param.descriptionCompressed = compressPromptDescription(
+        param.description,
+      );
+    }
+  }
+}
+
+/**
+ * @param {Record<string, unknown>} provider
+ */
+function normalizeProviderDoc(provider) {
+  if (typeof provider.description !== "string") {
+    return;
+  }
+  if (
+    provider.descriptionCompressed === undefined ||
+    provider.descriptionCompressed === ""
+  ) {
+    provider.descriptionCompressed = compressPromptDescription(
+      provider.description,
+    );
+  }
+}
+
+/**
+ * @param {{ core: { items: unknown[] }; all: { items: unknown[] } }} actionsSpec
+ * @param {{ core: { items: unknown[] }; all: { items: unknown[] } }} providersSpec
+ */
+function normalizeSpecsInPlace(actionsSpec, providersSpec) {
+  for (const action of actionsSpec.core.items) {
+    normalizeActionDoc(/** @type {Record<string, unknown>} */ (action));
+  }
+  for (const action of actionsSpec.all.items) {
+    normalizeActionDoc(/** @type {Record<string, unknown>} */ (action));
+  }
+  for (const p of providersSpec.core.items) {
+    normalizeProviderDoc(/** @type {Record<string, unknown>} */ (p));
+  }
+  for (const p of providersSpec.all.items) {
+    normalizeProviderDoc(/** @type {Record<string, unknown>} */ (p));
+  }
+}
+
 function generateTypeScript(actionsSpec, providersSpec, evaluatorsSpec) {
   const outDir = path.join(
     REPO_ROOT,
@@ -525,6 +615,7 @@ export type ActionDocParameterSchema = {
 export type ActionDocParameter = {
   name: string;
   description: string;
+  descriptionCompressed?: string;
   required?: boolean;
   schema: ActionDocParameterSchema;
   examples?: readonly ActionDocParameterExampleValue[];
@@ -547,6 +638,7 @@ export type ActionDocExampleMessage = {
 export type ActionDoc = {
   name: string;
   description: string;
+  descriptionCompressed?: string;
   similes?: readonly string[];
   parameters?: readonly ActionDocParameter[];
   examples?: readonly (readonly ActionDocExampleMessage[])[];
@@ -556,6 +648,7 @@ export type ActionDoc = {
 export type ProviderDoc = {
   name: string;
   description: string;
+  descriptionCompressed?: string;
   position?: number;
   dynamic?: boolean;
 };
@@ -612,7 +705,17 @@ export const coreEvaluatorDocs: readonly EvaluatorDoc[] = coreEvaluatorsSpec.eva
 export const allEvaluatorDocs: readonly EvaluatorDoc[] = allEvaluatorsSpec.evaluators;
 `;
 
-  fs.writeFileSync(path.join(outDir, "action-docs.ts"), content);
+  const actionDocsPath = path.join(outDir, "action-docs.ts");
+  fs.writeFileSync(actionDocsPath, content);
+  try {
+    execFileSync(
+      "bunx",
+      ["@biomejs/biome", "check", "--write", actionDocsPath],
+      { cwd: REPO_ROOT, stdio: "pipe" },
+    );
+  } catch {
+    // Biome may be unavailable in stripped-down environments.
+  }
 }
 
 function generatePython(actionsSpec, providersSpec, evaluatorsSpec) {
@@ -701,6 +804,7 @@ class ActionDocParameterSchema(TypedDict, total=False):
 class ActionDocParameter(TypedDict, total=False):
     name: str
     description: str
+    descriptionCompressed: str
     required: bool
     schema: ActionDocParameterSchema
     examples: list[ActionDocParameterExampleValue]
@@ -720,6 +824,7 @@ class ActionDocExampleMessage(TypedDict, total=False):
 class ActionDoc(TypedDict, total=False):
     name: str
     description: str
+    descriptionCompressed: str
     similes: list[str]
     parameters: list[ActionDocParameter]
     examples: list[list[ActionDocExampleMessage]]
@@ -729,6 +834,7 @@ class ActionDoc(TypedDict, total=False):
 class ProviderDoc(TypedDict, total=False):
     name: str
     description: str
+    descriptionCompressed: str
     position: int
     dynamic: bool
 
@@ -906,6 +1012,8 @@ function main() {
     CORE_EVALUATORS_SPEC_PATH,
     "evaluators",
   );
+
+  normalizeSpecsInPlace(actionsSpec, providersSpec);
 
   generateTypeScript(actionsSpec, providersSpec, evaluatorsSpec);
   generatePython(actionsSpec, providersSpec, evaluatorsSpec);

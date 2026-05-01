@@ -1,30 +1,40 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { Checkbox } from "../components/ui/checkbox";
-import { Label } from "../components/ui/label";
 
-const meta: Meta<typeof Checkbox> = {
-  title: "Atoms/Checkbox",
+const meta = {
+  title: "UI/Checkbox",
   component: Checkbox,
-};
-export default meta;
+  tags: ["autodocs"],
+  argTypes: {
+    disabled: { control: "boolean" },
+    defaultChecked: { control: "boolean" },
+  },
+} satisfies Meta<typeof Checkbox>;
 
-export const Default: StoryObj = {
-  render: () => (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <Checkbox id="auto" defaultChecked />
-        <Label htmlFor="auto">Auto-respond</Label>
-      </div>
-      <div className="flex items-center gap-2">
-        <Checkbox id="stream" />
-        <Label htmlFor="stream">Stream responses</Label>
-      </div>
-      <div className="flex items-center gap-2">
-        <Checkbox id="locked" disabled />
-        <Label htmlFor="locked" className="opacity-50">
-          Premium only
-        </Label>
-      </div>
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Default: Story = {};
+
+export const Checked: Story = {
+  args: { defaultChecked: true },
+};
+
+export const Disabled: Story = {
+  args: { disabled: true },
+};
+
+export const DisabledChecked: Story = {
+  args: { disabled: true, defaultChecked: true },
+};
+
+export const WithLabel: Story = {
+  render: (args) => (
+    <div className="flex items-center gap-2">
+      <Checkbox id="terms" {...args} />
+      <label htmlFor="terms" className="text-sm text-txt cursor-pointer">
+        Accept terms and conditions
+      </label>
     </div>
   ),
 };

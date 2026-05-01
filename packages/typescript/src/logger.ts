@@ -11,7 +11,6 @@ import adze, {
 	type UserConfiguration,
 } from "adze";
 import type Log from "adze/dist/log.js";
-import { parseBooleanValue } from "./utils/boolean";
 import { getEnv as getEnvironmentVar } from "./utils/environment";
 
 /**
@@ -185,6 +184,20 @@ function safeStringify(obj: unknown): string {
 }
 
 /**
+ * Parse boolean from text string
+ */
+function parseBooleanFromText(value: string | undefined | null): boolean {
+	if (!value) return false;
+	const normalized = value.toLowerCase().trim();
+	return (
+		normalized === "true" ||
+		normalized === "1" ||
+		normalized === "yes" ||
+		normalized === "on"
+	);
+}
+
+/**
  * Format a value for display in pretty log extras
  */
 function formatExtraValue(value: unknown): string {
@@ -202,7 +215,7 @@ function formatExtraValue(value: unknown): string {
  * Format: [src] message (key=val, key=val)
  *
  * agentId/agentName are NOT displayed in pretty mode because:
- * - Loggers with namespace already show #agentName prefix (via Adze)
+ * - Loggers with namespace already show an agent-prefixed tag (via Adze)
  * - These fields ARE still included in JSON mode for filtering/monitoring
  */
 function formatPrettyLog(
@@ -221,7 +234,7 @@ function formatPrettyLog(
 	const srcPart = src ? `[${src.toUpperCase()}] ` : "";
 
 	// Build extras: (key=val, key=val)
-	// Exclude: src (already in prefix), agentId/agentName (shown via Adze namespace #agent)
+	// Exclude: src (already in prefix), agentId/agentName (shown via Adze namespace tag)
 	const excludeKeys = ["src", "agentId", "agentName"];
 	const extraPairs: string[] = [];
 
@@ -259,9 +272,10 @@ export const customLevels: Record<string, number> = {
 };
 
 // Configuration flags
-const raw = parseBooleanValue(getEnvironmentVar("LOG_JSON_FORMAT")) ?? false;
-const showTimestamps =
-	parseBooleanValue(getEnvironmentVar("LOG_TIMESTAMPS") ?? "true") ?? false;
+const raw = parseBooleanFromText(getEnvironmentVar("LOG_JSON_FORMAT"));
+const showTimestamps = parseBooleanFromText(
+	getEnvironmentVar("LOG_TIMESTAMPS") ?? "true",
+);
 
 // Generate a unique server ID for this process instance
 const serverId =
@@ -340,8 +354,7 @@ function getFs(): typeof import("node:fs") | null {
 
 /**
  * Strip ANSI escape codes from a string for plain-text logging.
- * Uses RegExp constructor to avoid control-character-in-regex lint; the pattern
- * must match ANSI escape sequences (\x1B = ESC, \x07 = BEL).
+ * Uses RegExp constructor to avoid control-character-in-regex lint.
  */
 function stripAnsi(str: string): string {
 	const ESC = "\x1b";
@@ -386,7 +399,9 @@ function ensureFileLog(): boolean {
 		const logFilePath = isBooleanFlag
 			? pathMod.join(process.cwd(), "output.log")
 			: logFileEnv.trim();
-		const logDir = pathMod.dirname(logFilePath);
+		const logDir = pathMod.dirname(
+			isBooleanFlag ? pathMod.join(process.cwd(), "output.log") : logFilePath,
+		);
 
 		// Ensure log directory exists
 		fs.mkdirSync(logDir, { recursive: true });
@@ -517,11 +532,11 @@ export function logPrompt(
 	},
 ): string {
 	if (!ensureFileLog()) return "";
-	// Use next counter for prompts, store slug in metadata for response
+	// Generate next sequential counter for this prompt
 	const counter = ++_promptLogCounter;
 	const agentName = metadata?.agentName ?? "unknown";
 	const slug = promptSlug(counter, agentName, modelType);
-	// Store prompt slug for correlation with response
+	// Store slug in metadata to be reused by response
 	metadata = { ...metadata, promptSlug: slug };
 	writeToPromptLog(slug, "PROMPT", modelType, prompt, metadata);
 	return slug;
@@ -544,10 +559,9 @@ export function logResponse(
 	},
 ): string {
 	if (!ensureFileLog()) return "";
-	// If promptSlug not provided in metadata, log entries can't be correlated
-	// Don't increment counter - use same slug as prompt
 	const _agentName = metadata?.agentName ?? "unknown";
-	// Require promptSlug in metadata for correlation
+	void _agentName;
+	// Use the same slug that was stored in the prompt's metadata for correlation
 	const slug = metadata?.promptSlug;
 	if (!slug) {
 		logger.warn(
@@ -568,8 +582,9 @@ const CHAT_PREVIEW_IN_MAX = 200;
 const CHAT_PREVIEW_OUT_MAX = 120;
 
 function escapeChatPreview(text: string): string {
-	const oneLine = text.replace(/\s+/g, " ").trim();
-	return oneLine.replace(/"/g, '\\"');
+	const safe = text.length > 10_000 ? text.slice(0, 10_000) : text;
+	const oneLine = safe.replace(/\s+/g, " ").trim();
+	return oneLine.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
 function writeChatLine(line: string): void {
@@ -603,7 +618,7 @@ export function logChatIn(params: {
 	const roomShort = params.roomId.slice(0, 8);
 	const msgShort = params.messageId.slice(0, 8);
 	const source = params.source ?? "unknown";
-	const line = `[CHAT:IN]  #${params.agentName} room=${roomShort} msg=${msgShort} source=${source} "${preview}"`;
+	const line = `[CHAT:IN]  #agent:${params.agentName} room=${roomShort} msg=${msgShort} source=${source} "${preview}"`;
 	writeChatLine(line);
 	return line;
 }
@@ -623,7 +638,7 @@ export function logChatOut(params: {
 	actions?: string[];
 }): string {
 	const roomShort = params.roomId.slice(0, 8);
-	let part = `[CHAT:OUT] #${params.agentName} room=${roomShort} action=${params.action}`;
+	let part = `[CHAT:OUT] #agent:${params.agentName} room=${roomShort} action=${params.action}`;
 	if (params.actions && params.actions.length > 0) {
 		part += ` actions=${params.actions.join(",")}`;
 	}

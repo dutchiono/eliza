@@ -1,45 +1,53 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { ErrorBoundary } from "../components/ui/error-boundary";
 
-const meta: Meta<typeof ErrorBoundary> = {
-  title: "Molecules/ErrorBoundary",
+const meta = {
+  title: "UI/ErrorBoundary",
   component: ErrorBoundary,
-};
+  tags: ["autodocs"],
+} satisfies Meta<typeof ErrorBoundary>;
+
 export default meta;
+type Story = StoryObj<typeof meta>;
 
-function BrokenChild({ shouldThrow }: { shouldThrow: boolean }) {
-  if (shouldThrow) throw new Error("Simulated component error for demo");
-  return (
-    <div className="p-4 border rounded-md">✅ Child rendered successfully</div>
-  );
-}
+const SafeChild = () => (
+  <div className="p-4 border rounded-md">This content renders normally.</div>
+);
 
-export const NoError: StoryObj = {
+const BrokenChild = () => {
+  throw new Error("Something broke while rendering this component!");
+};
+
+export const Normal: Story = {
   render: () => (
     <ErrorBoundary>
-      <BrokenChild shouldThrow={false} />
+      <SafeChild />
     </ErrorBoundary>
   ),
 };
 
-export const DefaultFallback: StoryObj = {
+export const WithError: Story = {
   render: () => (
     <ErrorBoundary>
-      <BrokenChild shouldThrow={true} />
+      <BrokenChild />
     </ErrorBoundary>
   ),
 };
 
-export const CustomFallback: StoryObj = {
+export const CustomFallback: Story = {
   render: () => (
     <ErrorBoundary
       fallback={(error, reset) => (
-        <div className="p-4 border border-red-300 bg-red-50 rounded-md text-center">
-          <p className="text-sm font-bold text-red-600 mb-2">Custom Fallback</p>
-          <p className="text-xs text-red-500 mb-3">{error.message}</p>
+        <div className="rounded-md border border-[color:var(--accent)]/45 bg-[color:rgba(var(--accent-rgb,240,185,11),0.08)] p-6 text-center">
+          <p className="mb-2 font-semibold text-[color:var(--text-strong,var(--text,#111827))]">
+            Custom Error UI
+          </p>
+          <p className="mb-4 text-sm text-[color:var(--muted-strong,var(--muted,#4b5563))]">
+            {error.message}
+          </p>
           <button
             type="button"
-            className="px-3 py-1.5 text-xs border rounded hover:bg-red-100 transition-colors"
+            className="px-3 py-1 text-sm border rounded-md"
             onClick={reset}
           >
             Reset
@@ -47,7 +55,15 @@ export const CustomFallback: StoryObj = {
         </div>
       )}
     >
-      <BrokenChild shouldThrow={true} />
+      <BrokenChild />
+    </ErrorBoundary>
+  ),
+};
+
+export const CustomLabels: Story = {
+  render: () => (
+    <ErrorBoundary errorLabel="Oops!" retryLabel="Retry">
+      <BrokenChild />
     </ErrorBoundary>
   ),
 };

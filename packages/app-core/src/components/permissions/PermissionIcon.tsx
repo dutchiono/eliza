@@ -4,6 +4,7 @@ import {
   Monitor,
   MousePointer2,
   Settings,
+  ShieldBan,
   Terminal,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -15,6 +16,7 @@ export function PermissionIcon({ icon }: { icon: string }) {
     mic: <Mic className="w-4 h-4" />,
     camera: <Camera className="w-4 h-4" />,
     terminal: <Terminal className="w-4 h-4" />,
+    "shield-ban": <ShieldBan className="w-4 h-4" />,
   };
 
   return (

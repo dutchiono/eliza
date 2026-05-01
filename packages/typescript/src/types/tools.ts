@@ -25,12 +25,19 @@ export const TOOL_NAME_ALIASES: Record<string, string> = {
  * Use "group:<name>" syntax in policy configs (e.g., "group:fs").
  */
 export const TOOL_GROUPS: Record<string, string[]> = {
-	// Memory tools (provided by plugin-scratchpad)
-	"group:memory": ["scratchpad_search", "scratchpad_read"],
+	// Memory tools and registered scratchpad actions.
+	"group:memory": [
+		"scratchpad_add",
+		"scratchpad_search",
+		"scratchpad_read",
+		"scratchpad_replace",
+		"scratchpad_delete",
+		"read_attachment",
+	],
 	// Web tools
 	"group:web": ["web_search", "web_fetch"],
 	// Basic workspace/file tools
-	"group:fs": ["read", "write", "edit", "apply_patch"],
+	"group:fs": ["read", "read_file", "write", "edit", "apply_patch"],
 	// Host/runtime execution tools
 	"group:runtime": ["exec", "process"],
 	// Session management tools
@@ -63,8 +70,13 @@ export const TOOL_GROUPS: Record<string, string[]> = {
 		"sessions_send",
 		"sessions_spawn",
 		"session_status",
+		"scratchpad_add",
 		"scratchpad_search",
 		"scratchpad_read",
+		"scratchpad_replace",
+		"scratchpad_delete",
+		"read_attachment",
+		"read_file",
 		"web_search",
 		"web_fetch",
 		"image",

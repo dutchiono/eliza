@@ -37,12 +37,16 @@ export interface Entity
  * Defines roles within a system, typically for access control or permissions, often within a `World`.
  * - `OWNER`: Represents the highest level of control, typically the creator or primary administrator.
  * - `ADMIN`: Represents administrative privileges, usually a subset of owner capabilities.
+ * - `MEMBER`: Represents a regular member with standard permissions.
+ * - `GUEST`: Represents a guest with limited, read-oriented permissions.
  * - `NONE`: Indicates no specific role or default, minimal permissions.
  * These roles are often used in `World.metadata.roles` to assign roles to entities.
  */
 export const Role = {
 	OWNER: "OWNER",
 	ADMIN: "ADMIN",
+	MEMBER: "MEMBER",
+	GUEST: "GUEST",
 	NONE: "NONE",
 } as const;
 
@@ -63,6 +67,12 @@ export interface WorldMetadata
 	roles?: Record<string, Role>;
 	extra?: Metadata;
 	settings?: WorldSettings;
+	/** Platform-specific chat type (e.g., 'private', 'group', 'supergroup', 'channel') */
+	chatType?: string;
+	/** Whether Telegram forum mode is enabled for this world */
+	isForumEnabled?: boolean;
+	/** Allow platform-specific extensions */
+	[key: string]: unknown;
 }
 
 export interface World
@@ -74,6 +84,8 @@ export interface Room
 	extends Omit<ProtoRoom, "$typeName" | "$unknown" | "type" | "metadata"> {
 	type: ChannelType;
 	metadata?: Metadata;
+	/** Platform server/guild/chat ID that owns this room */
+	serverId?: string;
 }
 
 export type RoomMetadata = Metadata;

@@ -21,7 +21,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from elizaos.types.service import Service, ServiceType
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from elizaos.types.runtime import IAgentRuntime
 
 
-class HookSource(str, Enum):
+class HookSource(StrEnum):
     """Source of a hook registration."""
 
     BUNDLED = "bundled"
@@ -40,7 +40,7 @@ class HookSource(str, Enum):
     RUNTIME = "runtime"
 
 
-class HookEventType(str, Enum):
+class HookEventType(StrEnum):
     """Hook-specific event types."""
 
     HOOK_COMMAND_NEW = "HOOK_COMMAND_NEW"
@@ -48,7 +48,7 @@ class HookEventType(str, Enum):
     HOOK_COMMAND_STOP = "HOOK_COMMAND_STOP"
     HOOK_SESSION_START = "HOOK_SESSION_START"
     HOOK_SESSION_END = "HOOK_SESSION_END"
-    HOOK_AGENT_BOOTSTRAP = "HOOK_AGENT_BOOTSTRAP"
+    HOOK_AGENT_BASIC_CAPABILITIES = "HOOK_AGENT_BASIC_CAPABILITIES"
     HOOK_AGENT_START = "HOOK_AGENT_START"
     HOOK_AGENT_END = "HOOK_AGENT_END"
     HOOK_GATEWAY_START = "HOOK_GATEWAY_START"
@@ -147,7 +147,7 @@ LEGACY_EVENT_MAP: dict[str, str] = {
     "command:stop": HookEventType.HOOK_COMMAND_STOP.value,
     "session:start": HookEventType.HOOK_SESSION_START.value,
     "session:end": HookEventType.HOOK_SESSION_END.value,
-    "agent:bootstrap": HookEventType.HOOK_AGENT_BOOTSTRAP.value,
+    "agent:basic_capabilities": HookEventType.HOOK_AGENT_BASIC_CAPABILITIES.value,
     "agent:start": HookEventType.HOOK_AGENT_START.value,
     "agent:end": HookEventType.HOOK_AGENT_END.value,
     "gateway:start": HookEventType.HOOK_GATEWAY_START.value,

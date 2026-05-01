@@ -1,24 +1,17 @@
-/**
- * Platform detection and initialization utilities.
- *
- * Extracted from apps/app/src/main.tsx to be reusable across app shells.
- */
+/** Platform detection and initialization utilities. */
 
+import { Capacitor } from "@capacitor/core";
 import { isElectrobunRuntime } from "../bridge";
+import { getBootConfig, setBootConfig } from "../config/boot-config";
 
 // ── Platform detection ──────────────────────────────────────────────
 
 function detectPlatform(): { platform: string; isNative: boolean } {
   try {
-    const cap = (globalThis as Record<string, unknown>).Capacitor as
-      | { getPlatform?: () => string; isNativePlatform?: () => boolean }
-      | undefined;
-    if (cap?.getPlatform) {
-      return {
-        platform: cap.getPlatform(),
-        isNative: cap.isNativePlatform?.() ?? false,
-      };
-    }
+    return {
+      platform: Capacitor.getPlatform(),
+      isNative: Capacitor.isNativePlatform(),
+    };
   } catch {
     /* fallback */
   }
@@ -27,13 +20,31 @@ function detectPlatform(): { platform: string; isNative: boolean } {
 
 const detected = detectPlatform();
 
-export const platform = detected.platform;
+export const platform = isElectrobunRuntime()
+  ? "electrobun"
+  : detected.platform;
 export const isNative = detected.isNative;
-export const isIOS = detected.platform === "ios";
-export const isAndroid = detected.platform === "android";
+export const isIOS = platform === "ios";
+export const isAndroid = platform === "android";
 
-export function isElectronPlatform(): boolean {
-  return detected.platform === "electron" || isElectrobunRuntime();
+export function isDesktopPlatform(): boolean {
+  return platform === "electrobun";
+}
+
+/** True when the runtime can spin up a local agent — desktop or dev server. */
+export function canRunLocal(): boolean {
+  return isDesktopPlatform() || Boolean(import.meta.env.DEV);
+}
+
+/**
+ * True when the platform might host a local agent that the UI can reach over
+ * loopback. Used to decide whether the RuntimeGate's "Local Agent" tile
+ * should run a liveness probe before being shown. Desktop and dev mode
+ * always qualify; Android qualifies because Phase B's `MiladyAgentService`
+ * starts the bundled agent on `127.0.0.1:31337`.
+ */
+export function canHostLocalAgent(): boolean {
+  return canRunLocal() || isAndroid;
 }
 
 export function isWebPlatform(): boolean {
@@ -57,7 +68,7 @@ export interface ShareTargetPayload {
 
 declare global {
   interface Window {
-    __MILADY_SHARE_QUEUE__?: ShareTargetPayload[];
+    __ELIZAOS_SHARE_QUEUE__?: ShareTargetPayload[];
   }
 }
 
@@ -66,10 +77,10 @@ export function dispatchShareTarget(
   dispatchEvent: (name: string, detail: unknown) => void,
   eventName: string,
 ): void {
-  if (!window.__MILADY_SHARE_QUEUE__) {
-    window.__MILADY_SHARE_QUEUE__ = [];
+  if (!window.__ELIZAOS_SHARE_QUEUE__) {
+    window.__ELIZAOS_SHARE_QUEUE__ = [];
   }
-  window.__MILADY_SHARE_QUEUE__.push(payload);
+  window.__ELIZAOS_SHARE_QUEUE__.push(payload);
   dispatchEvent(eventName, payload);
 }
 
@@ -221,13 +232,13 @@ export function injectPopoutApiBase(): void {
         parsed.protocol === "https:" ||
         (parsed.protocol === "http:" && allowPrivateHttp)
       ) {
-        window.__MILADY_API_BASE__ = apiBase;
+        setBootConfig({ ...getBootConfig(), apiBase });
       } else {
         console.warn("[app-core] Rejected non-local apiBase:", host);
       }
     } catch {
       if (apiBase.startsWith("/") && !apiBase.startsWith("//")) {
-        window.__MILADY_API_BASE__ = apiBase;
+        setBootConfig({ ...getBootConfig(), apiBase });
       } else {
         console.warn("[app-core] Rejected invalid relative apiBase:", apiBase);
       }

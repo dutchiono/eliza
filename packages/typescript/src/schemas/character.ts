@@ -1,4 +1,4 @@
-import { z } from "zod";
+import z from "zod";
 import type { Character } from "../types/agent";
 import { ChannelType, ContentType } from "../types/primitives";
 import type { JsonValue } from "../types/proto";
@@ -29,7 +29,7 @@ export const mediaSchema = z
 			.optional()
 			.describe("Type of media content"),
 	})
-	.loose()
+	.passthrough()
 	.describe("Media attachment with URL and metadata");
 
 const jsonPrimitiveSchema = z.union([
@@ -163,8 +163,8 @@ const settingsKnownKeys = new Set([
 	"shouldRespondModel",
 	"useMultiStep",
 	"maxMultistepIterations",
-	"bootstrapDefllmoff",
-	"bootstrapKeepResp",
+	"basic-capabilitiesDefllmoff",
+	"basic-capabilitiesKeepResp",
 	"providersTotalTimeoutMs",
 	"maxWorkingMemoryEntries",
 	"alwaysRespondChannels",
@@ -183,8 +183,8 @@ export const settingsSchema = z
 		shouldRespondModel: z.string().optional(),
 		useMultiStep: z.boolean().optional(),
 		maxMultistepIterations: z.number().int().optional(),
-		bootstrapDefllmoff: z.boolean().optional(),
-		bootstrapKeepResp: z.boolean().optional(),
+		"basic-capabilitiesDefllmoff": z.boolean().optional(),
+		"basic-capabilitiesKeepResp": z.boolean().optional(),
 		providersTotalTimeoutMs: z.number().int().optional(),
 		maxWorkingMemoryEntries: z.number().int().optional(),
 		alwaysRespondChannels: z.string().optional(),

@@ -29,39 +29,27 @@
 #![warn(missing_docs)]
 #![warn(rustdoc::missing_crate_level_docs)]
 
+#[cfg(all(feature = "native", not(feature = "wasm")))]
+pub mod basic_capabilities_core;
+#[cfg(all(feature = "native", not(feature = "wasm")))]
+pub mod features;
 #[cfg(all(
-    feature = "bootstrap-internal",
+    feature = "basic_capabilities-internal",
     feature = "native",
     not(feature = "wasm")
 ))]
-pub mod advanced_capabilities;
+pub use features::{advanced_capabilities, basic_capabilities, core_capabilities};
 #[cfg(all(feature = "native", not(feature = "wasm")))]
-pub mod advanced_memory;
-#[cfg(all(feature = "native", not(feature = "wasm")))]
-pub mod advanced_planning;
-#[cfg(all(feature = "native", not(feature = "wasm")))]
-pub mod autonomy;
-#[cfg(all(
-    feature = "bootstrap-internal",
-    feature = "native",
-    not(feature = "wasm")
-))]
-pub mod basic_capabilities;
-#[cfg(all(
-    feature = "bootstrap-internal",
-    feature = "native",
-    not(feature = "wasm")
-))]
-pub mod bootstrap;
-#[cfg(all(feature = "native", not(feature = "wasm")))]
-pub mod bootstrap_core;
+pub use features::{advanced_memory, advanced_planning, autonomy};
 pub mod character;
 #[cfg(all(
-    feature = "bootstrap-internal",
+    feature = "basic_capabilities-internal",
     feature = "native",
     not(feature = "wasm")
 ))]
 pub mod error;
+#[cfg(all(feature = "native", not(feature = "wasm")))]
+pub mod native_features;
 pub mod platform;
 pub mod plugin;
 pub mod prompts;

@@ -1,11 +1,9 @@
 // registered to runtime through plugin
 
 import type { JsonValue } from "../types";
-import type { Memory } from "../types/memory";
 import type { UUID } from "../types/primitives";
 import type { IAgentRuntime } from "../types/runtime";
 import { Service, ServiceType } from "../types/service";
-import type { State } from "../types/state";
 import type { Task, TaskMetadata, TaskRunStatus } from "../types/task";
 import {
 	getTaskSchedulerAdapter,
@@ -38,7 +36,7 @@ function resolveDueTime(task: Task): number | null {
  * @static
  * @method start - Static method to start the TaskService
  * @method createTestTasks - Method to create test tasks
- * @method startTimer - Private method to start the timer for checking tasks
+ * @method startTimer - Public method to start the timer for checking tasks
  * @method validateTasks - Private method to validate tasks
  * @method checkTasks - Private method to check tasks and execute them
  * @method executeTask - Private method to execute a task
@@ -55,6 +53,8 @@ export class TaskService extends Service {
 	private readonly TICK_INTERVAL = 1000; // Check every second
 	/** Tracks task IDs currently being executed to prevent overlapping runs. WHY: blocking tasks must not run again until current run finishes. */
 	private executingTasks: Set<string> = new Set();
+	/** Tracks in-flight task promises so stop() can await a clean drain before runtime.close(). */
+	private executingTaskPromises = new Set<Promise<void>>();
 	/** When false, checkTasks skips the DB query. Set true by markDirty(); start true so first tick always queries. WHY: avoid redundant getTasks every second when nothing changed. */
 	private tasksDirty = true;
 	/** Set true in stop(). runTick is a no-op when true (daemon may call runTick after unregister). */
@@ -92,10 +92,10 @@ export class TaskService extends Service {
 		// Register task worker for repeating task
 		this.runtime.registerTaskWorker({
 			name: "REPEATING_TEST_TASK",
-			validate: async (_runtime, _message, _state) => {
+			shouldRun: async () => {
 				this.runtime.logger.debug(
 					{
-						src: "plugin:bootstrap:service:task",
+						src: "plugin:basic-capabilities:service:task",
 						agentId: this.runtime.agentId,
 					},
 					"Validating repeating test task",
@@ -105,7 +105,7 @@ export class TaskService extends Service {
 			execute: async (_runtime, _options) => {
 				this.runtime.logger.debug(
 					{
-						src: "plugin:bootstrap:service:task",
+						src: "plugin:basic-capabilities:service:task",
 						agentId: this.runtime.agentId,
 					},
 					"Executing repeating test task",
@@ -117,10 +117,10 @@ export class TaskService extends Service {
 		// Register task worker for one-time task
 		this.runtime.registerTaskWorker({
 			name: "ONETIME_TEST_TASK",
-			validate: async (_runtime, _message, _state) => {
+			shouldRun: async () => {
 				this.runtime.logger.debug(
 					{
-						src: "plugin:bootstrap:service:task",
+						src: "plugin:basic-capabilities:service:task",
 						agentId: this.runtime.agentId,
 					},
 					"Validating one-time test task",
@@ -130,7 +130,7 @@ export class TaskService extends Service {
 			execute: async (_runtime, _options) => {
 				this.runtime.logger.debug(
 					{
-						src: "plugin:bootstrap:service:task",
+						src: "plugin:basic-capabilities:service:task",
 						agentId: this.runtime.agentId,
 					},
 					"Executing one-time test task",
@@ -167,11 +167,14 @@ export class TaskService extends Service {
 	}
 
 	/**
-	 * Starts a timer that runs a function to check tasks at a specified interval.
+	 * Start the task poll timer. Call explicitly in daemon mode; not started automatically.
+	 * WHY public: initialize() does not start the task service or timer. Daemon entry points
+	 * that need scheduled tasks call getService("task") then startTimer(). Edge/ephemeral
+	 * runtimes typically do not call this.
 	 * Priority: (1) serverless -> no timer, host calls runDueTasks(); (2) daemon present -> register, no local timer; (3) else local setInterval.
 	 * WHY serverless first: no long-lived process; WHY daemon second: one shared getTasks(agentIds) per tick for all agents.
 	 */
-	private startTimer() {
+	startTimer() {
 		if (this.runtime.serverless === true) {
 			return;
 		}
@@ -191,7 +194,7 @@ export class TaskService extends Service {
 	/**
 	 * Validates an array of Task objects.
 	 * Skips tasks without IDs or if no worker is found for the task.
-	 * Uses worker.shouldRun(runtime, task) when present, else falls back to worker.validate(runtime, {}, {}).
+	 * Uses worker.shouldRun(runtime, task) when present; otherwise the task passes.
 	 * @param {Task[]} tasks - An array of Task objects to validate.
 	 * @returns {Promise<Task[]>} - A Promise that resolves with an array of validated Task objects.
 	 */
@@ -211,15 +214,6 @@ export class TaskService extends Service {
 			if (worker.shouldRun) {
 				const shouldRun = await worker.shouldRun(this.runtime, task);
 				if (!shouldRun) {
-					continue;
-				}
-			} else if (worker.validate) {
-				const isValid = await worker.validate(
-					this.runtime,
-					{} as Memory,
-					{} as State,
-				);
-				if (!isValid) {
 					continue;
 				}
 			}
@@ -316,7 +310,7 @@ export class TaskService extends Service {
 			) {
 				this.runtime.logger.warn(
 					{
-						src: "plugin:bootstrap:service:task",
+						src: "plugin:basic-capabilities:service:task",
 						agentId: this.runtime.agentId,
 						taskName: task.name,
 						taskId: task.id,
@@ -330,7 +324,7 @@ export class TaskService extends Service {
 			if (isBlocking && task.id && this.executingTasks.has(task.id)) {
 				this.runtime.logger.debug(
 					{
-						src: "plugin:bootstrap:service:task",
+						src: "plugin:basic-capabilities:service:task",
 						agentId: this.runtime.agentId,
 						taskName: task.name,
 						taskId: task.id,
@@ -342,7 +336,7 @@ export class TaskService extends Service {
 
 			this.runtime.logger.debug(
 				{
-					src: "plugin:bootstrap:service:task",
+					src: "plugin:basic-capabilities:service:task",
 					agentId: this.runtime.agentId,
 					taskName: task.name,
 					intervalMs: updateIntervalMs,
@@ -364,10 +358,20 @@ export class TaskService extends Service {
 	 * @param {Task} task - The task to be executed.
 	 */
 	private async executeTask(task: Task) {
-		if (!task || !task.id) {
+		const execution = this.executeTaskInternal(task);
+		this.executingTaskPromises.add(execution);
+		try {
+			await execution;
+		} finally {
+			this.executingTaskPromises.delete(execution);
+		}
+	}
+
+	private async executeTaskInternal(task: Task) {
+		if (!task?.id) {
 			this.runtime.logger.debug(
 				{
-					src: "plugin:bootstrap:service:task",
+					src: "plugin:basic-capabilities:service:task",
 					agentId: this.runtime.agentId,
 				},
 				"Task not found",
@@ -379,7 +383,7 @@ export class TaskService extends Service {
 		if (!worker) {
 			this.runtime.logger.debug(
 				{
-					src: "plugin:bootstrap:service:task",
+					src: "plugin:basic-capabilities:service:task",
 					agentId: this.runtime.agentId,
 					taskName: task.name,
 				},
@@ -399,7 +403,11 @@ export class TaskService extends Service {
 			const result = await worker.execute(this.runtime, taskOptions, task);
 
 			if (task.tags?.includes("repeat")) {
-				const meta = task.metadata as TaskMetadata | undefined;
+				const latestTask = await this.runtime.getTask(task.id);
+				if (!latestTask) {
+					return;
+				}
+				const meta = latestTask.metadata as TaskMetadata | undefined;
 				const baseInterval = meta?.baseInterval ?? meta?.updateInterval;
 				const newMeta: TaskMetadata = {
 					...meta,
@@ -423,7 +431,7 @@ export class TaskService extends Service {
 				await this.runtime.deleteTask(task.id);
 				this.runtime.logger.debug(
 					{
-						src: "plugin:bootstrap:service:task",
+						src: "plugin:basic-capabilities:service:task",
 						agentId: this.runtime.agentId,
 						taskName: task.name,
 						taskId: task.id,
@@ -433,13 +441,17 @@ export class TaskService extends Service {
 			}
 		} catch (error) {
 			if (task.tags?.includes("repeat")) {
-				const failureCount =
-					((task.metadata as TaskMetadata)?.failureCount ?? 0) + 1;
-				const rawMax = (task.metadata as TaskMetadata)?.maxFailures;
+				const latestTask = await this.runtime.getTask(task.id);
+				if (!latestTask) {
+					return;
+				}
+				const meta = latestTask.metadata as TaskMetadata | undefined;
+				const failureCount = (meta?.failureCount ?? 0) + 1;
+				const rawMax = meta?.maxFailures;
 				const neverPause = rawMax === Infinity || rawMax === -1;
 				const maxFailures = neverPause ? Infinity : (rawMax ?? 5);
 				const newMeta: TaskMetadata & Record<string, unknown> = {
-					...(task.metadata as TaskMetadata),
+					...(meta ?? {}),
 					updatedAt: Date.now(),
 					failureCount,
 					lastError: error instanceof Error ? error.message : String(error),
@@ -456,9 +468,7 @@ export class TaskService extends Service {
 					);
 				} else {
 					const baseInterval =
-						(task.metadata as TaskMetadata)?.baseInterval ??
-						(task.metadata as TaskMetadata)?.updateInterval ??
-						1000;
+						meta?.baseInterval ?? meta?.updateInterval ?? 1000;
 					newMeta.updateInterval = Math.min(
 						baseInterval * 2 ** failureCount,
 						300_000,
@@ -469,7 +479,7 @@ export class TaskService extends Service {
 				await this.runtime.deleteTask(task.id);
 				this.runtime.logger.debug(
 					{
-						src: "plugin:bootstrap:service:task",
+						src: "plugin:basic-capabilities:service:task",
 						agentId: this.runtime.agentId,
 						taskName: task.name,
 						taskId: task.id,
@@ -486,7 +496,7 @@ export class TaskService extends Service {
 			const durationMs = Date.now() - startTime;
 			this.runtime.logger.debug(
 				{
-					src: "plugin:bootstrap:service:task",
+					src: "plugin:basic-capabilities:service:task",
 					agentId: this.runtime.agentId,
 					taskName: task.name,
 					taskId: task.id,
@@ -626,6 +636,10 @@ export class TaskService extends Service {
 		if (this.timer) {
 			clearInterval(this.timer);
 			this.timer = null;
+		}
+		const inFlight = Array.from(this.executingTaskPromises);
+		if (inFlight.length > 0) {
+			await Promise.allSettled(inFlight);
 		}
 		// Clear executing tasks set on stop
 		this.executingTasks.clear();

@@ -1,12 +1,27 @@
 /**
  * Trajectory context management for benchmark/training traces.
  *
- * Mirrors the streaming context design:
- * - Node.js: AsyncLocalStorage for async-safe propagation
- * - Browser: stack-based fallback
+ * Node.js: AsyncLocalStorage for async-safe propagation (initialized
+ * synchronously to avoid race with first message processing).
+ * Browser: stack-based fallback.
  */
 export interface TrajectoryContext {
 	trajectoryStepId?: string;
+	/** Current runtime run identifier associated with the active trajectory step. */
+	runId?: string;
+	/** Room context for pipeline/model hooks emitted during trajectory logging. */
+	roomId?: string;
+	/** Source message identifier associated with the active trajectory context. */
+	messageId?: string;
+	/** Pipeline stage purpose for trajectory logging (e.g. "should_respond", "response", "action", "evaluation"). */
+	purpose?: string;
+	/**
+	 * Step ID of the parent trajectory step, when the current step was
+	 * dispatched from inside another (e.g. an action invoked through
+	 * `executeCode`). Persistence layers use this to attach child step IDs
+	 * to the parent's `childSteps` array.
+	 */
+	parentStepId?: string;
 }
 
 export interface ITrajectoryContextManager {
@@ -39,8 +54,19 @@ class StackContextManager implements ITrajectoryContextManager {
 	}
 }
 
+// Initialize the context manager synchronously in Node.js so that
+// AsyncLocalStorage is available before the first message is processed.
+// The previous lazy async init (.then()) caused a race: the stack-based
+// fallback was used for early messages, which doesn't propagate context
+// through async/await — so logLlmCall never saw the trajectory step ID.
 let globalContextManager: ITrajectoryContextManager | null = null;
-let contextManagerInitialized = false;
+const TRAJECTORY_CONTEXT_MANAGER_KEY = Symbol.for(
+	"elizaos.trajectoryContextManager",
+);
+
+type GlobalWithTrajectoryContextManager = typeof globalThis & {
+	[TRAJECTORY_CONTEXT_MANAGER_KEY]?: ITrajectoryContextManager;
+};
 
 function isNodeEnvironment(): boolean {
 	return (
@@ -50,41 +76,26 @@ function isNodeEnvironment(): boolean {
 	);
 }
 
-async function createContextManager(): Promise<ITrajectoryContextManager> {
+function initContextManagerSync(): ITrajectoryContextManager {
 	if (isNodeEnvironment()) {
 		try {
-			// Dynamic import to avoid bundling Node.js code in browser builds
-			const { AsyncLocalStorage } = await import("node:async_hooks");
+			// eslint-disable-next-line @typescript-eslint/no-require-imports
+			const { AsyncLocalStorage } =
+				require("node:async_hooks") as typeof import("node:async_hooks");
+			const storage = new AsyncLocalStorage<TrajectoryContext | undefined>();
 			return {
-				storage: new AsyncLocalStorage<TrajectoryContext | undefined>(),
 				run<T>(
 					context: TrajectoryContext | undefined,
 					fn: () => T | Promise<T>,
 				): T | Promise<T> {
-					return (
-						this as {
-							storage: InstanceType<
-								typeof AsyncLocalStorage<TrajectoryContext | undefined>
-							>;
-						}
-					).storage.run(context, fn);
+					return storage.run(context, fn);
 				},
 				active(): TrajectoryContext | undefined {
-					return (
-						this as {
-							storage: InstanceType<
-								typeof AsyncLocalStorage<TrajectoryContext | undefined>
-							>;
-						}
-					).storage.getStore();
+					return storage.getStore();
 				},
-			} as ITrajectoryContextManager & {
-				storage: InstanceType<
-					typeof AsyncLocalStorage<TrajectoryContext | undefined>
-				>;
-			};
+			} as ITrajectoryContextManager;
 		} catch {
-			return new StackContextManager();
+			// AsyncLocalStorage unavailable — fall back to stack
 		}
 	}
 	return new StackContextManager();
@@ -92,17 +103,16 @@ async function createContextManager(): Promise<ITrajectoryContextManager> {
 
 function getOrCreateContextManager(): ITrajectoryContextManager {
 	if (!globalContextManager) {
-		globalContextManager = new StackContextManager();
-
-		if (isNodeEnvironment() && !contextManagerInitialized) {
-			contextManagerInitialized = true;
-			createContextManager()
-				.then((manager) => {
-					globalContextManager = manager;
-				})
-				.catch(() => {
-					// Keep using StackContextManager
-				});
+		const globalManager = (globalThis as GlobalWithTrajectoryContextManager)[
+			TRAJECTORY_CONTEXT_MANAGER_KEY
+		];
+		if (globalManager) {
+			globalContextManager = globalManager;
+		} else {
+			globalContextManager = initContextManagerSync();
+			(globalThis as GlobalWithTrajectoryContextManager)[
+				TRAJECTORY_CONTEXT_MANAGER_KEY
+			] = globalContextManager;
 		}
 	}
 	return globalContextManager;
@@ -112,7 +122,9 @@ export function setTrajectoryContextManager(
 	manager: ITrajectoryContextManager,
 ): void {
 	globalContextManager = manager;
-	contextManagerInitialized = true;
+	(globalThis as GlobalWithTrajectoryContextManager)[
+		TRAJECTORY_CONTEXT_MANAGER_KEY
+	] = manager;
 }
 
 export function getTrajectoryContextManager(): ITrajectoryContextManager {
@@ -128,4 +140,13 @@ export function runWithTrajectoryContext<T>(
 
 export function getTrajectoryContext(): TrajectoryContext | undefined {
 	return getOrCreateContextManager().active();
+}
+
+/**
+ * Set the pipeline purpose on the current trajectory context.
+ * Mutates in place so nested useModel calls pick up the correct stage.
+ */
+export function setTrajectoryPurpose(purpose: string): void {
+	const ctx = getOrCreateContextManager().active();
+	if (ctx) ctx.purpose = purpose;
 }

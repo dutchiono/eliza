@@ -5,7 +5,7 @@
  * This is used when no cloud API keys are configured.
  */
 
-import { z } from "zod";
+import z from "zod";
 import { logger } from "../logger";
 import type {
 	GenerateTextParams,
@@ -262,14 +262,23 @@ async function handleTextLarge(
  */
 async function handleTextEmbedding(
 	_runtime: IAgentRuntime,
-	params: TextEmbeddingParams,
+	params: TextEmbeddingParams | string | null,
 ): Promise<number[]> {
 	logger.debug(
 		{ src: "ollama", model: DEFAULT_MODELS.embedding },
 		"TEXT_EMBEDDING request",
 	);
 
-	return generateEmbeddingWithOllama(DEFAULT_MODELS.embedding, params.text);
+	const text =
+		typeof params === "string"
+			? params
+			: params === null
+				? "test_dimension"
+				: params.text;
+	return generateEmbeddingWithOllama(
+		DEFAULT_MODELS.embedding,
+		text || "test_dimension",
+	);
 }
 
 /**
@@ -318,7 +327,9 @@ async function handleObjectLarge(
 type OllamaModelParams =
 	| GenerateTextParams
 	| TextEmbeddingParams
-	| ObjectGenerationParams;
+	| ObjectGenerationParams
+	| string
+	| null;
 
 /**
  * Union type of all model result types for Ollama handlers

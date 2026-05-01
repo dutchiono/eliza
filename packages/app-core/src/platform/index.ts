@@ -1,14 +1,12 @@
-/**
- * Platform utilities — onboarding permissions and platform initialization helpers.
- *
- * Migrated from apps/app/src/onboarding-permissions.ts and main.tsx.
- */
+/** Platform utilities — onboarding permissions and platform initialization helpers. */
 
 import type {
   AllPermissionsState,
   PermissionStatus,
   SystemPermissionId,
 } from "../api/client";
+
+export type * from "./types";
 
 // ── Onboarding permissions ──────────────────────────────────────────────
 
@@ -38,14 +36,19 @@ export function hasRequiredOnboardingPermissions(
 
 // ── Platform init ───────────────────────────────────────────────────────
 
-export { applyLaunchConnectionFromUrl } from "./browser-launch";
+export {
+  applyLaunchConnection,
+  applyLaunchConnectionFromUrl,
+} from "./browser-launch";
+export * from "./cloud-preference-patch";
+export * from "./desktop-permissions-client";
 export {
   type DeepLinkHandlers,
   dispatchShareTarget,
   handleDeepLink,
   injectPopoutApiBase,
   isAndroid,
-  isElectronPlatform,
+  isDesktopPlatform,
   isIOS,
   isNative,
   isPopoutWindow,
@@ -55,4 +58,10 @@ export {
   type ShareTargetPayload,
   setupPlatformStyles,
 } from "./init";
-export * from "./lifo";
+export * from "./onboarding-reset";
+export type {
+  CloudPreferenceClientLike,
+  OnboardingClientLike,
+  PermissionsClientLike,
+} from "./types";
+export * from "./window-shell";

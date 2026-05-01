@@ -7,17 +7,23 @@ import {
 	type StreamingContext,
 	setStreamingContextManager,
 } from "../streaming-context";
-import { createNodeStreamingContextManager } from "../streaming-context.node";
+
 import type { UUID } from "../types";
 
 describe("Streaming Context", () => {
 	let originalManager: IStreamingContextManager;
 
-	beforeEach(() => {
+	beforeEach(async () => {
 		// Store original manager
 		originalManager = getStreamingContextManager();
 		// Configure Node.js AsyncLocalStorage manager for tests
-		setStreamingContextManager(createNodeStreamingContextManager());
+		const { AsyncLocalStorage } = await import("node:async_hooks");
+		const storage = new AsyncLocalStorage<StreamingContext | undefined>();
+		setStreamingContextManager({
+			run: <T>(context: StreamingContext | undefined, fn: () => T) =>
+				storage.run(context, fn),
+			active: () => storage.getStore(),
+		});
 	});
 
 	afterEach(() => {
@@ -100,12 +106,16 @@ describe("Streaming Context", () => {
 			const chunks2: string[] = [];
 
 			const context1: StreamingContext = {
-				onStreamChunk: async (chunk) => chunks1.push(chunk),
+				onStreamChunk: async (chunk) => {
+					chunks1.push(chunk);
+				},
 				messageId: "msg1" as UUID,
 			};
 
 			const context2: StreamingContext = {
-				onStreamChunk: async (chunk) => chunks2.push(chunk),
+				onStreamChunk: async (chunk) => {
+					chunks2.push(chunk);
+				},
 				messageId: "msg2" as UUID,
 			};
 
@@ -141,12 +151,16 @@ describe("Streaming Context", () => {
 			const innerChunks: string[] = [];
 
 			const outerContext: StreamingContext = {
-				onStreamChunk: async (chunk) => outerChunks.push(chunk),
+				onStreamChunk: async (chunk) => {
+					outerChunks.push(chunk);
+				},
 				messageId: "outer" as UUID,
 			};
 
 			const innerContext: StreamingContext = {
-				onStreamChunk: async (chunk) => innerChunks.push(chunk),
+				onStreamChunk: async (chunk) => {
+					innerChunks.push(chunk);
+				},
 				messageId: "inner" as UUID,
 			};
 

@@ -1,92 +1,75 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { useState } from "react";
-import {
-  ThemedSelect,
-  type ThemedSelectGroup,
-} from "../components/ui/themed-select";
+import { ThemedSelect } from "../components/ui/themed-select";
 
-const meta: Meta<typeof ThemedSelect> = {
-  title: "Molecules/ThemedSelect",
+const meta = {
+  title: "UI/ThemedSelect",
   component: ThemedSelect,
-};
-export default meta;
+  tags: ["autodocs"],
+} satisfies Meta<typeof ThemedSelect>;
 
-const sampleGroups: ThemedSelectGroup[] = [
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+const sampleGroups = [
   {
-    label: "OpenAI",
+    label: "Models",
     items: [
-      { id: "gpt-4o", text: "GPT-4o", hint: "Latest multimodal" },
-      { id: "gpt-4o-mini", text: "GPT-4o Mini", hint: "Fast & cheap" },
-      { id: "o1", text: "o1", hint: "Reasoning" },
+      { id: "gpt-4", text: "GPT-4", hint: "Most capable" },
+      { id: "gpt-3.5", text: "GPT-3.5", hint: "Fast" },
+      { id: "claude", text: "Claude", hint: "Anthropic" },
     ],
   },
   {
-    label: "Anthropic",
+    label: "Local",
     items: [
-      {
-        id: "claude-3.5-sonnet",
-        text: "Claude 3.5 Sonnet",
-        hint: "Best overall",
-      },
-      { id: "claude-3-haiku", text: "Claude 3 Haiku", hint: "Fastest" },
-    ],
-  },
-  {
-    label: "Google",
-    items: [
-      { id: "gemini-pro", text: "Gemini Pro" },
-      { id: "gemini-flash", text: "Gemini Flash", hint: "Speed optimised" },
+      { id: "llama", text: "Llama 3", hint: "Meta" },
+      { id: "mistral", text: "Mistral", hint: "Open source" },
     ],
   },
 ];
 
-export const Default: StoryObj = {
+export const Default: Story = {
   render: () => {
     const [value, setValue] = useState<string | null>(null);
     return (
-      <div className="w-72">
+      <ThemedSelect
+        value={value}
+        groups={sampleGroups}
+        onChange={setValue}
+        placeholder="Select a model..."
+        className="w-80"
+      />
+    );
+  },
+};
+
+export const WithValue: Story = {
+  render: () => {
+    const [value, setValue] = useState<string | null>("claude");
+    return (
+      <ThemedSelect
+        value={value}
+        groups={sampleGroups}
+        onChange={setValue}
+        className="w-80"
+      />
+    );
+  },
+};
+
+export const MenuTop: Story = {
+  render: () => {
+    const [value, setValue] = useState<string | null>(null);
+    return (
+      <div className="pt-64">
         <ThemedSelect
           value={value}
           groups={sampleGroups}
           onChange={setValue}
-          placeholder="Choose a model…"
-        />
-      </div>
-    );
-  },
-};
-
-export const WithSelection: StoryObj = {
-  render: () => {
-    const [value, setValue] = useState<string | null>("claude-3.5-sonnet");
-    return (
-      <div className="w-72">
-        <ThemedSelect value={value} groups={sampleGroups} onChange={setValue} />
-      </div>
-    );
-  },
-};
-
-export const SingleGroup: StoryObj = {
-  render: () => {
-    const [value, setValue] = useState<string | null>(null);
-    const groups: ThemedSelectGroup[] = [
-      {
-        label: "Chains",
-        items: [
-          { id: "eth", text: "Ethereum" },
-          { id: "bsc", text: "BSC" },
-          { id: "sol", text: "Solana" },
-        ],
-      },
-    ];
-    return (
-      <div className="w-56">
-        <ThemedSelect
-          value={value}
-          groups={groups}
-          onChange={setValue}
-          placeholder="Select chain…"
+          menuPlacement="top"
+          placeholder="Opens upward..."
+          className="w-80"
         />
       </div>
     );

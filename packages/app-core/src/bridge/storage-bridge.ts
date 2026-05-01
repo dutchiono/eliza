@@ -12,14 +12,21 @@
 
 import { Capacitor } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
+import { MOBILE_RUNTIME_MODE_STORAGE_KEY } from "../onboarding/mobile-runtime-mode";
 
 const isNative = Capacitor.isNativePlatform();
 
-// Keys that should be synced to Capacitor Preferences
+// Keys that should be synced to Capacitor Preferences.
+// On iOS, WKWebView localStorage can be purged under memory pressure.
+// These keys are critical for session restoration on mobile.
 const SYNCED_KEYS = new Set([
-  "milady.control.settings.v1",
-  "milady.device.identity",
-  "milady.device.auth",
+  "eliza.control.settings.v1",
+  "eliza.device.identity",
+  "eliza.device.auth",
+  "elizaos:active-server",
+  "eliza:onboarding-complete",
+  "eliza:onboarding:step",
+  MOBILE_RUNTIME_MODE_STORAGE_KEY,
 ]);
 
 // In-memory cache of values from Preferences (for native)

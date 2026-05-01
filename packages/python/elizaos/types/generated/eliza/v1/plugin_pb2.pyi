@@ -1,14 +1,13 @@
 from eliza.v1 import agent_pb2 as _agent_pb2
 from eliza.v1 import components_pb2 as _components_pb2
+from eliza.v1 import payment_pb2 as _payment_pb2
 from eliza.v1 import service_pb2 as _service_pb2
 from google.protobuf import struct_pb2 as _struct_pb2
-from eliza.v1 import payment_pb2 as _payment_pb2
 from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from collections.abc import Iterable as _Iterable, Mapping as _Mapping
-from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
+from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Mapping, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -45,7 +44,7 @@ class RouteManifest(_message.Message):
     is_multipart: bool
     file_path: str
     x402: _payment_pb2.X402Config
-    def __init__(self, method: _Optional[_Union[HttpMethod, str]] = ..., path: _Optional[str] = ..., name: _Optional[str] = ..., public: _Optional[bool] = ..., is_multipart: _Optional[bool] = ..., file_path: _Optional[str] = ..., x402: _Optional[_Union[_payment_pb2.X402Config, _Mapping]] = ...) -> None: ...
+    def __init__(self, method: _Optional[_Union[HttpMethod, str]] = ..., path: _Optional[str] = ..., name: _Optional[str] = ..., public: bool = ..., is_multipart: bool = ..., file_path: _Optional[str] = ..., x402: _Optional[_Union[_payment_pb2.X402Config, _Mapping]] = ...) -> None: ...
 
 class JSONSchemaDefinition(_message.Message):
     __slots__ = ("type", "properties", "items", "required", "enum_values", "description")

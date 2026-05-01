@@ -1,3 +1,34 @@
+// ── Shared Electrobun RPC types ─────────────────────────────────────────────
+// Defined here so both src/bridge/ and platforms/electrobun/ can import them
+// without crossing the build boundary.
+
+export type ExistingElizaInstallSource =
+  | "config-path-env"
+  | "state-dir-env"
+  | "default-state-dir";
+
+export interface ExistingElizaInstallInfo {
+  detected: boolean;
+  stateDir: string;
+  configPath: string;
+  configExists: boolean;
+  stateDirExists: boolean;
+  hasStateEntries: boolean;
+  source: ExistingElizaInstallSource;
+}
+
+/**
+ * A translation function accepted by UI components.
+ *
+ * The second parameter is intentionally `Record<string, unknown>` so that
+ * callers passing narrower variable maps (e.g. `Record<string, string>`) or
+ * no second argument at all remain compatible.
+ */
+export type TranslateFn = (
+  key: string,
+  options?: Record<string, unknown>,
+) => string;
+
 export type ChannelsStatusSnapshot = {
   ts: number;
   channelOrder: string[];
@@ -281,11 +312,9 @@ export type ConfigSnapshot = {
 
 // ── Simple showIf (legacy, still supported) ─────────────────────────
 
-export type ShowIfCondition = {
-  field: string;
-  op: "eq" | "neq" | "in" | "truthy" | "falsy";
-  value?: unknown;
-};
+export type { ShowIfCondition } from "@elizaos/agent";
+
+import type { ShowIfCondition } from "@elizaos/agent";
 
 // ── Dynamic values (Phase 2) ─────────────────────────────────────────
 
@@ -453,13 +482,6 @@ export interface PluginUiTheme {
 }
 
 export type ConfigUiHints = Record<string, ConfigUiHint>;
-
-export type ConfigSchemaResponse = {
-  schema: unknown;
-  uiHints: ConfigUiHints;
-  version: string;
-  generatedAt: string;
-};
 
 export type PresenceEntry = {
   deviceFamily?: string | null;
@@ -704,12 +726,3 @@ export type StatusSummary = Record<string, unknown>;
 export type HealthSnapshot = Record<string, unknown>;
 
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal";
-
-export type LogEntry = {
-  raw: string;
-  time?: string | null;
-  level?: LogLevel | null;
-  subsystem?: string | null;
-  message?: string | null;
-  meta?: Record<string, unknown> | null;
-};

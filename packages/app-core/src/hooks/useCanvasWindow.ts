@@ -7,7 +7,7 @@
  *
  * Works in:
  *   - Electrobun — calls via the preload-exposed renderer RPC
- *   - Legacy Electron — falls back to the historical Electron bridge
+ *   - Legacy desktop bridge compatibility — falls back to the historical bridge
  *
  * Falls back gracefully (isReady=false, no window created) when neither
  * runtime is detected (web / Capacitor / SSR).
@@ -200,7 +200,12 @@ export function useCanvasWindow(
               rpcMethod: "canvasDestroyWindow",
               ipcChannel: "canvas:destroyWindow",
               params: { id },
-            }).catch(() => {});
+            }).catch((err: unknown) => {
+              console.warn(
+                "[useCanvasWindow] canvas:destroyWindow cleanup failed",
+                err,
+              );
+            });
           }
           return;
         }
@@ -322,7 +327,12 @@ export function useCanvasWindow(
           rpcMethod: "canvasDestroyWindow",
           ipcChannel: "canvas:destroyWindow",
           params: { id },
-        }).catch(() => {});
+        }).catch((err: unknown) => {
+          console.warn(
+            "[useCanvasWindow] canvas:destroyWindow teardown failed",
+            err,
+          );
+        });
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -6,10 +6,7 @@ import {
   type UiLanguage,
 } from "./messages";
 
-export type TranslationVars = Record<
-  string,
-  string | number | boolean | null | undefined
->;
+export type TranslationVars = Record<string, unknown>;
 
 const UI_LANGUAGE_SET = new Set<string>(UI_LANGUAGES);
 
@@ -38,6 +35,8 @@ export function normalizeLanguage(input: unknown): UiLanguage {
   if (lower.startsWith("ko")) return "ko";
   if (lower.startsWith("es")) return "es";
   if (lower.startsWith("pt")) return "pt";
+  if (lower.startsWith("vi")) return "vi";
+  if (lower.startsWith("tl") || lower.startsWith("fil")) return "tl";
   return DEFAULT_UI_LANGUAGE;
 }
 

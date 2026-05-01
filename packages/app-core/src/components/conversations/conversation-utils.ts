@@ -7,15 +7,17 @@ export function getLocalizedConversationTitle(
     vars?: Record<string, string | number | boolean | null | undefined>,
   ) => string,
 ): string {
+  const trimmed = title?.trim() ?? "";
   if (
-    !title ||
-    title === "New Chat" ||
-    title === "conversations.newChatTitle"
+    !trimmed ||
+    trimmed === "New Chat" ||
+    trimmed === "companion.newChat" ||
+    trimmed.toLowerCase() === "default"
   ) {
-    const localized = t("conversations.newChatTitle");
-    return localized === "conversations.newChatTitle" ? "New Chat" : localized;
+    const localized = t("common.newChat");
+    return localized === "companion.newChat" ? "New Chat" : localized;
   }
-  return title;
+  return trimmed;
 }
 
 export const BROWSER_CAPABILITY_PLUGIN_IDS = new Set([
@@ -81,7 +83,6 @@ export function resolveProviderLabel(model: string | undefined): string {
     { match: "together", label: "Together AI" },
     { match: "zai", label: "z.ai" },
     { match: "cohere", label: "Cohere" },
-    { match: "pi-ai", label: "Pi AI" },
   ];
   for (const provider of knownProviders) {
     if (lower.includes(provider.match)) return provider.label;
@@ -116,7 +117,10 @@ export function estimateTokenCost(
 ): string {
   const normalizedModel = (model ?? "").toLowerCase();
   const pricingByMillion: Record<string, [number, number]> = {
-    "gpt-5": [1.25, 10.0],
+    "gpt-5.5-pro": [30.0, 180.0],
+    "gpt-5.5-mini": [0.75, 4.5],
+    "gpt-5.5-nano": [0.2, 1.25],
+    "gpt-5.5": [2.5, 15.0],
     "gpt-4.1": [2.0, 8.0],
     "gpt-4o": [2.5, 10.0],
     "gpt-4": [30.0, 60.0],

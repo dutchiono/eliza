@@ -29,10 +29,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -47,7 +47,7 @@ jobs:
           xcodebuild -version
 
       - name: Cache CocoaPods
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.APP_DIR }}/ios/App/Pods
           key: pods-${{ runner.os }}-${{ hashFiles('apps/app/ios/App/Podfile.lock') }}
@@ -127,7 +127,7 @@ jobs:
             -workspace App.xcworkspace \
             -scheme App \
             -configuration Release \
-            -archivePath $RUNNER_TEMP/Milady.xcarchive \
+            -archivePath $RUNNER_TEMP/Eliza.xcarchive \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
@@ -144,7 +144,7 @@ jobs:
             -workspace App.xcworkspace \
             -scheme App \
             -configuration Release \
-            -archivePath $RUNNER_TEMP/Milady.xcarchive \
+            -archivePath $RUNNER_TEMP/Eliza.xcarchive \
             -allowProvisioningUpdates \
             | xcbeautify || true
 
@@ -168,7 +168,7 @@ jobs:
             <string>${IOS_TEAM_ID}</string>
             <key>provisioningProfiles</key>
             <dict>
-              <key>ai.milady.app</key>
+              <key>ai.eliza.app</key>
               <string>${IOS_PROVISION_PROFILE_NAME}</string>
             </dict>
           </dict>
@@ -176,19 +176,19 @@ jobs:
           PLIST
 
           xcodebuild -exportArchive \
-            -archivePath $RUNNER_TEMP/Milady.xcarchive \
+            -archivePath $RUNNER_TEMP/Eliza.xcarchive \
             -exportOptionsPlist $RUNNER_TEMP/ExportOptions.plist \
             -exportPath $RUNNER_TEMP/export
 
           # Rename IPA with version
-          mv $RUNNER_TEMP/export/App.ipa $RUNNER_TEMP/export/Milady-${{ steps.version.outputs.version }}.ipa
+          mv $RUNNER_TEMP/export/App.ipa $RUNNER_TEMP/export/Eliza-${{ steps.version.outputs.version }}.ipa
 
       - name: Upload archive artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: milady-ios-${{ env.IOS_CERTIFICATE_BASE64 != '' && 'release' || 'unsigned' }}
+          name: eliza-ios-${{ env.IOS_CERTIFICATE_BASE64 != '' && 'release' || 'unsigned' }}
           path: |
-            $RUNNER_TEMP/Milady.xcarchive
+            $RUNNER_TEMP/Eliza.xcarchive
             $RUNNER_TEMP/export/*.ipa
           if-no-files-found: warn
         env:
@@ -198,7 +198,7 @@ jobs:
         if: (github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.upload_to_release)) && env.IOS_CERTIFICATE_BASE64 != ''
         env:
           IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event_name == 'release' && github.event.release.tag_name || '' }}
           files: ${{ runner.temp }}/export/*.ipa

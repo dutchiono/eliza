@@ -1,52 +1,52 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { useState } from "react";
-import { SearchBar } from "../components/ui/search-bar";
+import { SearchBar } from "../components/composites/search";
 
-const meta: Meta<typeof SearchBar> = {
-  title: "Molecules/SearchBar",
+const meta = {
+  title: "UI/SearchBar",
   component: SearchBar,
-};
-export default meta;
+  tags: ["autodocs"],
+  argTypes: {
+    onSearch: { action: "onSearch" },
+    placeholder: { control: "text" },
+    searching: { control: "boolean" },
+    searchLabel: { control: "text" },
+    searchingLabel: { control: "text" },
+  },
+  args: {
+    placeholder: "Search...",
+    searching: false,
+  },
+} satisfies Meta<typeof SearchBar>;
 
-export const Default: StoryObj = {
-  render: () => {
-    const [results, setResults] = useState<string[]>([]);
-    return (
-      <div className="w-96">
-        <SearchBar
-          onSearch={(q) => setResults((p) => [...p, q])}
-          placeholder="Search knowledge base…"
-        />
-        {results.length > 0 && (
-          <div className="text-xs text-muted space-y-0.5 mt-2">
-            {results.map((r, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: composite key with index as tiebreaker
-              <div key={`${r}-${i}`}>Searched: &ldquo;{r}&rdquo;</div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Default: Story = {
+  args: {
+    placeholder: "Search...",
+    searching: false,
   },
 };
 
-export const Searching: StoryObj = {
-  render: () => (
-    <div className="w-96">
-      <SearchBar onSearch={() => {}} searching placeholder="Searching…" />
-    </div>
-  ),
+export const CustomPlaceholder: Story = {
+  args: {
+    placeholder: "Search plugins...",
+    searching: false,
+  },
 };
 
-export const CustomLabels: StoryObj = {
-  render: () => (
-    <div className="w-96">
-      <SearchBar
-        onSearch={() => {}}
-        placeholder="Find documents…"
-        searchLabel="Find"
-        searchingLabel="Looking…"
-      />
-    </div>
-  ),
+export const Searching: Story = {
+  args: {
+    placeholder: "Search...",
+    searching: true,
+  },
+};
+
+export const CustomLabels: Story = {
+  args: {
+    placeholder: "Find agents...",
+    searching: false,
+    searchLabel: "Find",
+    searchingLabel: "Finding...",
+  },
 };

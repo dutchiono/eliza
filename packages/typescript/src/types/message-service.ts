@@ -1,6 +1,11 @@
-import type { HandlerCallback } from "./components";
+import type {
+	AgentContext,
+	HandlerCallback,
+	StreamChunkCallback,
+} from "./components";
 import type { Room } from "./environment";
 import type { Memory } from "./memory";
+import type { ModelType } from "./model";
 import type { Content, Media, MentionContext, UUID } from "./primitives";
 import type {
 	MessageProcessingMode as ProtoMessageProcessingMode,
@@ -29,14 +34,39 @@ export interface MessageProcessingOptions
 	useMultiStep?: boolean;
 	maxMultiStepIterations?: number;
 	shouldRespondModel?: ShouldRespondModelType;
-	onStreamChunk?: (chunk: string, messageId?: string) => Promise<void>;
+	onStreamChunk?: StreamChunkCallback;
+	/**
+	 * When true, run a follow-up reasoning pass after actions complete so the
+	 * agent can decide whether to share results, run another action, or stop.
+	 * Defaults to enabled unless runtime.getSetting("CONTINUE_AFTER_ACTIONS")
+	 * explicitly disables it.
+	 */
+	continueAfterActions?: boolean;
 	/** Signal to abort message processing */
 	abortSignal?: AbortSignal;
 	/**
-	 * When true, do not discard responses when a newer message is being processed (same as BOOTSTRAP_KEEP_RESP).
-	 * @default resolved from runtime.getSetting("BOOTSTRAP_KEEP_RESP") if not set
+	 * When true, do not discard responses when a newer message is being processed (same as BASIC_CAPABILITIES_KEEP_RESP).
+	 * @default resolved from runtime.getSetting("BASIC_CAPABILITIES_KEEP_RESP") if not set
 	 */
 	keepExistingResponses?: boolean;
+	/**
+	 * Called after the planner commits to executing registered actions (mode === "actions"),
+	 * immediately before `processActions`. Omit for simple single-shot replies (mode === "simple").
+	 * Use for channel typing indicators so users do not see "typing" during planning-only turns.
+	 */
+	onBeforeActionExecution?: (ctx: {
+		runtime: IAgentRuntime;
+		message: Memory;
+	}) => void | Promise<void>;
+}
+
+/**
+ * Dual-pressure scores from the shouldRespond classifier.
+ */
+export interface DualPressureScores {
+	speakUp: number;
+	holdBack: number;
+	net: number;
 }
 
 /**
@@ -50,6 +80,8 @@ export interface MessageProcessingResult {
 	mode?: MessageProcessingMode;
 	skipEvaluation?: boolean;
 	reason?: string;
+	dualPressure?: DualPressureScores | null;
+	shouldRespondClassifierAction?: string | null;
 }
 
 /**
@@ -59,17 +91,42 @@ export interface ResponseDecision {
 	shouldRespond: boolean;
 	skipEvaluation: boolean;
 	reason: string;
+	pressure?: DualPressureScores | null;
+	classifierAction?: string | null;
+}
+
+/**
+ * Extended response decision that includes context routing.
+ * Used by the fine-tuned shouldRespond + context-routing classifier.
+ * Falls back to ResponseDecision when context routing is not available.
+ */
+export interface ContextRoutedResponseDecision extends ResponseDecision {
+	/** The single best-matching domain context for this turn */
+	primaryContext?: AgentContext;
+	/** Additional relevant contexts (may enable extra providers/actions) */
+	secondaryContexts?: AgentContext[];
+	/** Turn IDs that contributed to the intent (for multi-turn extraction) */
+	evidenceTurnIds?: string[];
 }
 
 export type ShouldRespondModelType =
 	| ProtoShouldRespondModelType
+	| "nano"
 	| "small"
-	| "large";
+	| "large"
+	| "mega"
+	| "response-handler"
+	| typeof ModelType.TEXT_NANO
+	| typeof ModelType.TEXT_SMALL
+	| typeof ModelType.TEXT_LARGE
+	| typeof ModelType.TEXT_MEGA
+	| typeof ModelType.RESPONSE_HANDLER;
 export type MessageProcessingMode =
 	| ProtoMessageProcessingMode
 	| "simple"
 	| "actions"
-	| "none";
+	| "none"
+	| "blocked";
 
 /**
  * Core interface for message handling service.

@@ -44,6 +44,12 @@ export type CharacterSettings = Omit<
 	DISABLE_BASIC_CAPABILITIES?: boolean | string;
 	ENABLE_EXTENDED_CAPABILITIES?: boolean | string;
 	ADVANCED_CAPABILITIES?: boolean | string;
+	ENABLE_TRUST?: boolean | string;
+	ENABLE_SECRETS_MANAGER?: boolean | string;
+	ENABLE_PLUGIN_MANAGER?: boolean | string;
+	ENABLE_KNOWLEDGE?: boolean | string;
+	ENABLE_RELATIONSHIPS?: boolean | string;
+	ENABLE_TRAJECTORIES?: boolean | string;
 	secrets?: Record<string, string | boolean | number>;
 	[key: string]: JsonValue | undefined;
 };
@@ -57,12 +63,14 @@ export type Character = Partial<
 		| "messageExamples"
 		| "knowledge"
 		| "secrets"
+		| "style"
 	>
 > & {
 	settings?: CharacterSettings;
 	secrets?: Record<string, string | number | boolean>;
 	messageExamples?: MessageExampleGroup[];
 	knowledge?: KnowledgeSourceItem[];
+	style?: { all?: string[]; chat?: string[]; post?: string[] };
 	/** Enable advanced planning capabilities for this character */
 	advancedPlanning?: boolean;
 	/** Enable advanced memory capabilities for this character */
@@ -98,4 +106,6 @@ export interface Agent
 	status?: AgentStatus | ProtoAgentStatus;
 	createdAt: number | bigint;
 	updatedAt: number | bigint;
+	/** Arbitrary metadata persisted alongside the agent record. */
+	metadata?: Record<string, unknown>;
 }

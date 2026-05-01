@@ -4,8 +4,7 @@ from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from collections.abc import Iterable as _Iterable, Mapping as _Mapping
-from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
+from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Mapping, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -40,15 +39,15 @@ class KnowledgeDirectory(_message.Message):
     SHARED_FIELD_NUMBER: _ClassVar[int]
     path: str
     shared: bool
-    def __init__(self, path: _Optional[str] = ..., shared: _Optional[bool] = ...) -> None: ...
+    def __init__(self, path: _Optional[str] = ..., shared: bool = ...) -> None: ...
 
 class CharacterSettings(_message.Message):
-    __slots__ = ("should_respond_model", "use_multi_step", "max_multistep_iterations", "bootstrap_defllmoff", "bootstrap_keep_resp", "providers_total_timeout_ms", "max_working_memory_entries", "always_respond_channels", "always_respond_sources", "default_temperature", "default_max_tokens", "default_frequency_penalty", "default_presence_penalty", "disable_basic_capabilities", "extra")
+    __slots__ = ("should_respond_model", "use_multi_step", "max_multistep_iterations", "basic_capabilities_defllmoff", "basic_capabilities_keep_resp", "providers_total_timeout_ms", "max_working_memory_entries", "always_respond_channels", "always_respond_sources", "default_temperature", "default_max_tokens", "default_frequency_penalty", "default_presence_penalty", "disable_basic_capabilities", "enable_extended_capabilities", "extra", "enable_knowledge", "enable_relationships", "enable_trajectories")
     SHOULD_RESPOND_MODEL_FIELD_NUMBER: _ClassVar[int]
     USE_MULTI_STEP_FIELD_NUMBER: _ClassVar[int]
     MAX_MULTISTEP_ITERATIONS_FIELD_NUMBER: _ClassVar[int]
-    BOOTSTRAP_DEFLLMOFF_FIELD_NUMBER: _ClassVar[int]
-    BOOTSTRAP_KEEP_RESP_FIELD_NUMBER: _ClassVar[int]
+    BASIC_CAPABILITIES_DEFLLMOFF_FIELD_NUMBER: _ClassVar[int]
+    BASIC_CAPABILITIES_KEEP_RESP_FIELD_NUMBER: _ClassVar[int]
     PROVIDERS_TOTAL_TIMEOUT_MS_FIELD_NUMBER: _ClassVar[int]
     MAX_WORKING_MEMORY_ENTRIES_FIELD_NUMBER: _ClassVar[int]
     ALWAYS_RESPOND_CHANNELS_FIELD_NUMBER: _ClassVar[int]
@@ -58,12 +57,16 @@ class CharacterSettings(_message.Message):
     DEFAULT_FREQUENCY_PENALTY_FIELD_NUMBER: _ClassVar[int]
     DEFAULT_PRESENCE_PENALTY_FIELD_NUMBER: _ClassVar[int]
     DISABLE_BASIC_CAPABILITIES_FIELD_NUMBER: _ClassVar[int]
+    ENABLE_EXTENDED_CAPABILITIES_FIELD_NUMBER: _ClassVar[int]
     EXTRA_FIELD_NUMBER: _ClassVar[int]
+    ENABLE_KNOWLEDGE_FIELD_NUMBER: _ClassVar[int]
+    ENABLE_RELATIONSHIPS_FIELD_NUMBER: _ClassVar[int]
+    ENABLE_TRAJECTORIES_FIELD_NUMBER: _ClassVar[int]
     should_respond_model: str
     use_multi_step: bool
     max_multistep_iterations: int
-    bootstrap_defllmoff: bool
-    bootstrap_keep_resp: bool
+    basic_capabilities_defllmoff: bool
+    basic_capabilities_keep_resp: bool
     providers_total_timeout_ms: int
     max_working_memory_entries: int
     always_respond_channels: str
@@ -73,8 +76,12 @@ class CharacterSettings(_message.Message):
     default_frequency_penalty: float
     default_presence_penalty: float
     disable_basic_capabilities: bool
+    enable_extended_capabilities: bool
     extra: _struct_pb2.Struct
-    def __init__(self, should_respond_model: _Optional[str] = ..., use_multi_step: _Optional[bool] = ..., max_multistep_iterations: _Optional[int] = ..., bootstrap_defllmoff: _Optional[bool] = ..., bootstrap_keep_resp: _Optional[bool] = ..., providers_total_timeout_ms: _Optional[int] = ..., max_working_memory_entries: _Optional[int] = ..., always_respond_channels: _Optional[str] = ..., always_respond_sources: _Optional[str] = ..., default_temperature: _Optional[float] = ..., default_max_tokens: _Optional[int] = ..., default_frequency_penalty: _Optional[float] = ..., default_presence_penalty: _Optional[float] = ..., disable_basic_capabilities: _Optional[bool] = ..., extra: _Optional[_Union[_struct_pb2.Struct, _Mapping]] = ...) -> None: ...
+    enable_knowledge: bool
+    enable_relationships: bool
+    enable_trajectories: bool
+    def __init__(self, should_respond_model: _Optional[str] = ..., use_multi_step: bool = ..., max_multistep_iterations: _Optional[int] = ..., basic_capabilities_defllmoff: bool = ..., basic_capabilities_keep_resp: bool = ..., providers_total_timeout_ms: _Optional[int] = ..., max_working_memory_entries: _Optional[int] = ..., always_respond_channels: _Optional[str] = ..., always_respond_sources: _Optional[str] = ..., default_temperature: _Optional[float] = ..., default_max_tokens: _Optional[int] = ..., default_frequency_penalty: _Optional[float] = ..., default_presence_penalty: _Optional[float] = ..., disable_basic_capabilities: bool = ..., enable_extended_capabilities: bool = ..., extra: _Optional[_Union[_struct_pb2.Struct, _Mapping]] = ..., enable_knowledge: bool = ..., enable_relationships: bool = ..., enable_trajectories: bool = ...) -> None: ...
 
 class StyleGuides(_message.Message):
     __slots__ = ("all", "chat", "post")
@@ -136,7 +143,7 @@ class Character(_message.Message):
     style: StyleGuides
     advanced_planning: bool
     advanced_memory: bool
-    def __init__(self, id: _Optional[str] = ..., name: _Optional[str] = ..., username: _Optional[str] = ..., system: _Optional[str] = ..., templates: _Optional[_Mapping[str, str]] = ..., bio: _Optional[_Iterable[str]] = ..., message_examples: _Optional[_Iterable[_Union[MessageExampleGroup, _Mapping]]] = ..., post_examples: _Optional[_Iterable[str]] = ..., topics: _Optional[_Iterable[str]] = ..., adjectives: _Optional[_Iterable[str]] = ..., knowledge: _Optional[_Iterable[_Union[KnowledgeItem, _Mapping]]] = ..., plugins: _Optional[_Iterable[str]] = ..., settings: _Optional[_Union[CharacterSettings, _Mapping]] = ..., secrets: _Optional[_Mapping[str, str]] = ..., style: _Optional[_Union[StyleGuides, _Mapping]] = ..., advanced_planning: _Optional[bool] = ..., advanced_memory: _Optional[bool] = ...) -> None: ...
+    def __init__(self, id: _Optional[str] = ..., name: _Optional[str] = ..., username: _Optional[str] = ..., system: _Optional[str] = ..., templates: _Optional[_Mapping[str, str]] = ..., bio: _Optional[_Iterable[str]] = ..., message_examples: _Optional[_Iterable[_Union[MessageExampleGroup, _Mapping]]] = ..., post_examples: _Optional[_Iterable[str]] = ..., topics: _Optional[_Iterable[str]] = ..., adjectives: _Optional[_Iterable[str]] = ..., knowledge: _Optional[_Iterable[_Union[KnowledgeItem, _Mapping]]] = ..., plugins: _Optional[_Iterable[str]] = ..., settings: _Optional[_Union[CharacterSettings, _Mapping]] = ..., secrets: _Optional[_Mapping[str, str]] = ..., style: _Optional[_Union[StyleGuides, _Mapping]] = ..., advanced_planning: bool = ..., advanced_memory: bool = ...) -> None: ...
 
 class MessageExampleGroup(_message.Message):
     __slots__ = ("examples",)
@@ -156,4 +163,4 @@ class Agent(_message.Message):
     status: AgentStatus
     created_at: int
     updated_at: int
-    def __init__(self, character: _Optional[_Union[Character, _Mapping]] = ..., enabled: _Optional[bool] = ..., status: _Optional[_Union[AgentStatus, str]] = ..., created_at: _Optional[int] = ..., updated_at: _Optional[int] = ...) -> None: ...
+    def __init__(self, character: _Optional[_Union[Character, _Mapping]] = ..., enabled: bool = ..., status: _Optional[_Union[AgentStatus, str]] = ..., created_at: _Optional[int] = ..., updated_at: _Optional[int] = ...) -> None: ...

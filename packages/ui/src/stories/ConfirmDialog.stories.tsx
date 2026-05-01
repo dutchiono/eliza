@@ -1,32 +1,70 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { useState } from "react";
-import { Button } from "../components/ui/button";
-import { ConfirmDialog } from "../components/ui/confirm-dialog";
+import { fn } from "@storybook/test";
+import { ConfirmDialog, PromptDialog } from "../components/ui/confirm-dialog";
 
-const meta: Meta<typeof ConfirmDialog> = {
-  title: "Molecules/ConfirmDialog",
+const meta = {
+  title: "UI/ConfirmDialog",
   component: ConfirmDialog,
-};
-export default meta;
-
-export const Danger: StoryObj = {
-  render: () => {
-    const [open, setOpen] = useState(false);
-    return (
-      <div className="p-4">
-        <Button variant="destructive" size="sm" onClick={() => setOpen(true)}>
-          Delete Agent
-        </Button>
-        <ConfirmDialog
-          open={open}
-          title="Delete Agent"
-          message="This will permanently delete the agent and all its data."
-          confirmLabel="Delete"
-          tone="danger"
-          onConfirm={() => setOpen(false)}
-          onCancel={() => setOpen(false)}
-        />
-      </div>
-    );
+  tags: ["autodocs"],
+  argTypes: {
+    open: { control: "boolean" },
+    title: { control: "text" },
+    message: { control: "text" },
+    confirmLabel: { control: "text" },
+    cancelLabel: { control: "text" },
+    variant: {
+      control: "select",
+      options: ["default", "danger", "warn"],
+    },
   },
+  args: {
+    onConfirm: fn(),
+    onCancel: fn(),
+  },
+} satisfies Meta<typeof ConfirmDialog>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Default: Story = {
+  args: {
+    open: true,
+    title: "Confirm Action",
+    message: "Are you sure you want to proceed?",
+  },
+};
+
+export const Danger: Story = {
+  args: {
+    open: true,
+    title: "Delete Item",
+    message:
+      "This action cannot be undone. All data will be permanently removed.",
+    confirmLabel: "Delete",
+    variant: "danger",
+  },
+};
+
+export const Warn: Story = {
+  args: {
+    open: true,
+    title: "Unsaved Changes",
+    message: "You have unsaved changes. Do you want to leave without saving?",
+    confirmLabel: "Leave",
+    variant: "warn",
+  },
+};
+
+export const Prompt: Story = {
+  render: () => (
+    <PromptDialog
+      open={true}
+      title="Rename Agent"
+      message="Enter a new name for the agent."
+      placeholder="Agent name"
+      defaultValue="Eliza"
+      onConfirm={fn()}
+      onCancel={fn()}
+    />
+  ),
 };

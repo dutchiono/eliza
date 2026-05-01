@@ -1,11 +1,13 @@
 /**
  * Resolve app-shipped public assets (e.g. vrms/, animations/) to runtime-safe URLs.
  *
- * In packaged Electron, the renderer can run on file:// and later navigate to
+ * In packaged desktop builds, the renderer can run on file:// and later navigate to
  * absolute paths (e.g. /chat). Root-relative assets like /vrms/1.vrm then
  * resolve to file:///vrms/1.vrm and fail. We lock the asset base URL once from
  * initial startup and resolve assets against that stable base.
  */
+import { getBootConfig } from "../config/boot-config";
+import { getElizaApiBase } from "./eliza-globals";
 
 type AssetUrlResolveOptions = {
   currentUrl?: string;
@@ -26,6 +28,10 @@ function isAlreadyAbsolute(assetPath: string): boolean {
   return /^[A-Za-z][A-Za-z0-9+.-]*:/.test(assetPath);
 }
 
+function normalizeBaseHref(baseHref: string): string {
+  return baseHref.endsWith("/") ? baseHref : `${baseHref}/`;
+}
+
 function inferBaseForUrl(url: URL): string {
   if (url.protocol !== "file:") return "/";
 
@@ -42,9 +48,24 @@ function inferBaseForUrl(url: URL): string {
   return "/";
 }
 
+/**
+ * For http/https origins (web + Electrobun dev static server) the static asset
+ * root is always the origin root. We must NOT honor Vite's `base: "./"` here
+ * because relative resolution against the current SPA route URL produces
+ * `/apps/app-heroes/...` etc., which the SPA's catch-all returns HTML for —
+ * silently breaking <img> tags via decode errors.
+ */
+function shouldIgnoreViteBase(url: URL): boolean {
+  return url.protocol === "http:" || url.protocol === "https:";
+}
+
 function computeBaseHref(currentUrl: string, baseUrl?: string): string {
   const current = new URL(currentUrl);
-  const base = baseUrl?.trim() || inferBaseForUrl(current);
+  const explicit = baseUrl?.trim();
+  const base =
+    explicit && !shouldIgnoreViteBase(current)
+      ? explicit
+      : inferBaseForUrl(current);
   return new URL(base, current).href;
 }
 
@@ -79,6 +100,18 @@ export function resolveAppAssetUrl(
   const normalized = stripLeadingPathMarkers(assetPath);
   if (!normalized) return normalized;
 
+  const configuredBaseUrl = getBootConfig().assetBaseUrl?.trim();
+  if (configuredBaseUrl) {
+    try {
+      return new URL(
+        normalized,
+        normalizeBaseHref(configuredBaseUrl),
+      ).toString();
+    } catch {
+      // Fall through to local runtime resolution when the configured CDN base is invalid.
+    }
+  }
+
   if (options?.currentUrl) {
     try {
       const baseHref = computeBaseHref(options.currentUrl, options.baseUrl);
@@ -94,17 +127,42 @@ export function resolveAppAssetUrl(
   return new URL(normalized, baseHref).toString();
 }
 
+/** Keep in sync with `ElizaClient` SESSION_STORAGE_API_BASE_KEY. */
+const ELIZA_API_BASE_SESSION_KEY = "elizaos_api_base";
+
+function readSessionStorageApiBase(): string | undefined {
+  try {
+    if (typeof window === "undefined") return undefined;
+    const raw = window.sessionStorage.getItem(ELIZA_API_BASE_SESSION_KEY);
+    const trimmed = raw?.trim();
+    return trimmed && trimmed.length > 0 ? trimmed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Resolve an API path (e.g. "/api/avatar/vrm") to a full URL reachable from
- * the renderer.  In Electron the page origin is capacitor-electron:// or
+ * the renderer. In desktop shells the page origin is electrobun:// or
  * file://, so bare /api/... paths resolve to the SPA instead of the backend.
- * This helper prefixes with window.__MILADY_API_BASE__ when available.
+ *
+ * Resolution order: boot `apiBase` → shell-injected `__ELIZAOS_API_BASE__` →
+ * `sessionStorage` fallback. The boot config is the current client-owned
+ * source of truth because `client.setBaseUrl()` updates it whenever the user
+ * switches servers. Injection still beats stale session state from prior
+ * sessions, but it must not override the active runtime target once the client
+ * has changed it.
  */
 export function resolveApiUrl(apiPath: string): string {
-  if (typeof window !== "undefined") {
-    const base = (window as unknown as Record<string, unknown>)
-      .__MILADY_API_BASE__ as string | undefined;
-    if (base) return `${base}${apiPath}`;
-  }
-  return apiPath;
+  const bootRaw = getBootConfig().apiBase?.trim();
+  const boot = bootRaw && bootRaw.length > 0 ? bootRaw : undefined;
+  const injectedRaw = getElizaApiBase()?.trim();
+  const injected =
+    injectedRaw && injectedRaw.length > 0 ? injectedRaw : undefined;
+  const stored = readSessionStorageApiBase();
+  const base = boot ?? injected ?? stored;
+  if (!base) return apiPath;
+  const normalized = base.replace(/\/+$/, "");
+  const suffix = apiPath.startsWith("/") ? apiPath : `/${apiPath}`;
+  return `${normalized}${suffix}`;
 }

@@ -1,99 +1,119 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import {
-  HoverTooltip,
-  IconTooltip,
-  Spotlight,
-} from "../components/ui/tooltip-extended";
+import { HoverTooltip, IconTooltip } from "../components/ui/tooltip-extended";
 
-const meta: Meta = { title: "Molecules/TooltipExtended" };
+const meta = {
+  title: "UI/TooltipExtended",
+  component: HoverTooltip,
+  tags: ["autodocs"],
+} satisfies Meta<typeof HoverTooltip>;
+
 export default meta;
+type Story = StoryObj<typeof meta>;
 
-export const HoverPositions: StoryObj = {
+export const HoverTop: Story = {
   render: () => (
-    <div className="flex gap-16 items-center justify-center py-24">
-      <HoverTooltip content="Top tooltip" position="top">
-        <span className="px-3 py-1 border rounded text-sm">Top</span>
-      </HoverTooltip>
-      <HoverTooltip content="Bottom tooltip" position="bottom">
-        <span className="px-3 py-1 border rounded text-sm">Bottom</span>
-      </HoverTooltip>
-      <HoverTooltip content="Left tooltip" position="left">
-        <span className="px-3 py-1 border rounded text-sm">Left</span>
-      </HoverTooltip>
-      <HoverTooltip content="Right tooltip" position="right">
-        <span className="px-3 py-1 border rounded text-sm">Right</span>
-      </HoverTooltip>
-    </div>
-  ),
-};
-
-export const HoverWithDismiss: StoryObj = {
-  render: () => (
-    <div className="flex justify-center py-16">
+    <div className="p-16">
       <HoverTooltip
-        content={<span className="text-xs">Dismissable tooltip content</span>}
-        position="bottom"
-        visible
-        onDismiss={() => alert("Dismissed!")}
+        content={<span className="text-sm">Tooltip on top</span>}
+        position="top"
       >
-        <span className="px-3 py-1 border rounded text-sm">Always Visible</span>
+        <span className="rounded-md border border-input bg-bg px-4 py-2 text-sm">
+          Hover me (top)
+        </span>
       </HoverTooltip>
     </div>
   ),
 };
 
-export const HoverNoArrow: StoryObj = {
+export const HoverBottom: Story = {
   render: () => (
-    <div className="flex justify-center py-16">
-      <HoverTooltip content="No arrow" position="top" showArrow={false}>
-        <span className="px-3 py-1 border rounded text-sm">Hover me</span>
+    <div className="p-16">
+      <HoverTooltip
+        content={<span className="text-sm">Tooltip on bottom</span>}
+        position="bottom"
+      >
+        <span className="rounded-md border border-input bg-bg px-4 py-2 text-sm">
+          Hover me (bottom)
+        </span>
       </HoverTooltip>
     </div>
   ),
 };
 
-export const IconTooltips: StoryObj = {
+export const HoverLeft: Story = {
   render: () => (
-    <div className="flex gap-12 items-center justify-center py-16">
-      <IconTooltip label="Settings" shortcut="⌘ ,">
-        <button type="button" className="p-2 border rounded hover:bg-bg-hover">
-          ⚙️
-        </button>
-      </IconTooltip>
-      <IconTooltip label="Delete" position="bottom">
-        <button type="button" className="p-2 border rounded hover:bg-bg-hover">
-          🗑️
-        </button>
-      </IconTooltip>
+    <div className="p-16 pl-48">
+      <HoverTooltip
+        content={<span className="text-sm">Tooltip on left</span>}
+        position="left"
+      >
+        <span className="rounded-md border border-input bg-bg px-4 py-2 text-sm">
+          Hover me (left)
+        </span>
+      </HoverTooltip>
     </div>
   ),
 };
 
-export const SpotlightOverlay: StoryObj = {
+export const HoverRight: Story = {
   render: () => (
-    <div>
-      <div className="flex gap-4 mb-8">
+    <div className="p-16">
+      <HoverTooltip
+        content={<span className="text-sm">Tooltip on right</span>}
+        position="right"
+      >
+        <span className="rounded-md border border-input bg-bg px-4 py-2 text-sm">
+          Hover me (right)
+        </span>
+      </HoverTooltip>
+    </div>
+  ),
+};
+
+export const IconWithLabel: Story = {
+  render: () => (
+    <div className="p-16">
+      <IconTooltip label="Save document" shortcut="Ctrl+S">
         <button
           type="button"
-          id="spotlight-target"
-          className="px-4 py-2 bg-accent text-accent-fg rounded"
+          className="rounded-md border border-input bg-bg p-2 text-sm"
         >
-          Target Element
+          Save
         </button>
-        <span className="text-muted text-sm self-center">
-          ← The spotlight highlights this button
-        </span>
+      </IconTooltip>
+    </div>
+  ),
+};
+
+export const IconBottomPosition: Story = {
+  render: () => (
+    <div className="p-16">
+      <IconTooltip label="Delete item" position="bottom">
+        <button
+          type="button"
+          className="rounded-md border border-input bg-bg p-2 text-sm"
+        >
+          Delete
+        </button>
+      </IconTooltip>
+    </div>
+  ),
+};
+
+export const SpotlightDemo: Story = {
+  render: () => (
+    <div className="relative">
+      <div
+        data-spotlight-target="demo"
+        className="rounded-md border border-input bg-bg px-4 py-2 text-sm"
+      >
+        Target Element
       </div>
-      <Spotlight
-        target="#spotlight-target"
-        title="Welcome!"
-        description="This is the target element. The spotlight creates a cutout overlay around it."
-        step={1}
-        totalSteps={3}
-        onNext={() => {}}
-        onPrev={() => {}}
-        onSkip={() => {}}
-      />
+      <p className="mt-4 text-xs text-muted">
+        Spotlight requires a DOM target matched by CSS selector. In production
+        it overlays the page with a cutout around the target element. See the
+        Spotlight component and useGuidedTour hook for full tour functionality.
+      </p>
     </div>
   ),
 };

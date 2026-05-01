@@ -71,8 +71,9 @@ pub use state::{
 // From database
 pub use database::{
     vector_dims, ActionLogBody, ActionLogContent, ActionLogResult, AgentRunCounts, AgentRunSummary,
-    AgentRunSummaryResult, BaseLogBody, CreateMemoryItem, EmbeddingLogBody, EmbeddingSearchResult,
-    EvaluatorLogBody, GetMemoriesParams, Log, LogBody, MemoryRetrievalOptions, MemorySearchOptions,
+    AgentRunSummaryResult, BaseLogBody, CreateMemoryItem, CreateRelationshipParams,
+    EmbeddingLogBody, EmbeddingSearchResult, EvaluatorLogBody, GetMemoriesParams,
+    GetRelationshipsParams, Log, LogBody, MemoryRetrievalOptions, MemorySearchOptions,
     ModelActionContext, ModelLogBody, PromptLogEntry, RunStatus, SearchMemoriesParams,
     UpdateMemoryItem,
 };
@@ -87,15 +88,15 @@ pub use model::{
     TranscriptionParams,
 };
 
-// Bootstrap compatibility: some built-in bootstrap modules reference `crate::types::ModelType`.
+// BasicCapabilities compatibility: some built-in basic_capabilities modules reference `crate::types::ModelType`.
 // The core Rust runtime primarily uses string model type names (e.g. "TEXT_LARGE"), but the
-// bootstrap plugin defines an enum wrapper used by its action APIs.
-#[cfg(all(feature = "bootstrap-internal", not(feature = "wasm")))]
-pub use crate::bootstrap::types::ModelType;
+// basic_capabilities plugin defines an enum wrapper used by its action APIs.
+#[cfg(all(feature = "basic_capabilities-internal", not(feature = "wasm")))]
+pub use crate::basic_capabilities::types::ModelType;
 
-// Bootstrap compatibility: evaluators historically referenced this via `crate::types::*`.
-#[cfg(all(feature = "bootstrap-internal", not(feature = "wasm")))]
-pub use crate::bootstrap::types::EvaluatorResult;
+// BasicCapabilities compatibility: evaluators historically referenced this via `crate::types::*`.
+#[cfg(all(feature = "basic_capabilities-internal", not(feature = "wasm")))]
+pub use crate::basic_capabilities::types::EvaluatorResult;
 
 // From plugin
 pub use plugin::{

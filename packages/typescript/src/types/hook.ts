@@ -1,7 +1,7 @@
 /**
  * Hook Service Type Definitions
  *
- * Provides the type system for the unified hook service that consolidates
+ * Provides the type system for the hook service that consolidates
  * event-driven hooks across the Eliza agent runtime.
  */
 
@@ -236,7 +236,7 @@ export interface HookLoadResult {
 // ============================================================================
 
 /**
- * The HookService provides a unified interface for registering, managing,
+ * The HookService provides a interface for registering, managing,
  * and executing hooks across the Eliza agent runtime.
  *
  * Hooks are event-driven handlers that can respond to various lifecycle
@@ -405,7 +405,7 @@ export const LEGACY_EVENT_MAP: Record<string, EventType> = {
 	"command:stop": EventType.HOOK_COMMAND_STOP,
 	"session:start": EventType.HOOK_SESSION_START,
 	"session:end": EventType.HOOK_SESSION_END,
-	"agent:bootstrap": EventType.HOOK_AGENT_BOOTSTRAP,
+	"agent:basic-capabilities": EventType.HOOK_AGENT_BASIC_CAPABILITIES,
 	"gateway:startup": EventType.HOOK_GATEWAY_START,
 	"gateway:stop": EventType.HOOK_GATEWAY_STOP,
 	// Plugin lifecycle hooks

@@ -1,4 +1,3 @@
-import { names, uniqueNamesGenerator } from "unique-names-generator";
 import { allActionDocs } from "./generated/action-docs.ts";
 import type {
 	Action,
@@ -9,6 +8,18 @@ import type {
 	ActionParameterValue,
 	JsonValue,
 } from "./types";
+import {
+	buildDeterministicSeed,
+	createDeterministicRandom,
+	deterministicShuffle,
+	getDeterministicNames,
+} from "./utils/deterministic";
+import {
+	encodeToonValue,
+	parseToonActionParams,
+	tryParseToonValue,
+} from "./utils/toon";
+import { parseJSONObjectFromText } from "./utils.ts";
 
 type ActionDocByName = Record<string, (typeof allActionDocs)[number]>;
 
@@ -23,6 +34,7 @@ const actionDocByName: ActionDocByName = allActionDocs.reduce<ActionDocByName>(
 export const composeActionExamples = (
 	actionsData: Action[],
 	count: number,
+	seed = "actions",
 ): string => {
 	if (!actionsData.length || count <= 0) {
 		return "";
@@ -44,19 +56,20 @@ export const composeActionExamples = (
 	);
 
 	const selectedExamples: ActionExample[][] = [];
+	const random = createDeterministicRandom(
+		buildDeterministicSeed(seed, "examples"),
+	);
 
 	const availableActionIndices = examplesCopy
 		.map((examples, index) => (examples.length > 0 ? index : -1))
 		.filter((index) => index !== -1);
 
 	while (selectedExamples.length < count && availableActionIndices.length > 0) {
-		const randomIndex = Math.floor(
-			Math.random() * availableActionIndices.length,
-		);
+		const randomIndex = Math.floor(random() * availableActionIndices.length);
 		const actionIndex = availableActionIndices[randomIndex];
 		const examples = examplesCopy[actionIndex];
 
-		const exampleIndex = Math.floor(Math.random() * examples.length);
+		const exampleIndex = Math.floor(random() * examples.length);
 		selectedExamples.push(examples.splice(exampleIndex, 1)[0]);
 
 		if (examples.length === 0) {
@@ -64,43 +77,27 @@ export const composeActionExamples = (
 		}
 	}
 
-	return formatSelectedExamples(selectedExamples);
+	return formatSelectedExamples(
+		selectedExamples,
+		buildDeterministicSeed(seed, "names"),
+	);
 };
-
-function escapeXmlText(text: string): string {
-	return text
-		.replaceAll("&", "&amp;")
-		.replaceAll("<", "&lt;")
-		.replaceAll(">", "&gt;");
-}
 
 function formatActionCallExample(example: {
 	user: string;
 	actions: readonly string[];
 	params?: Record<string, Record<string, string | number | boolean | null>>;
 }): string {
-	const actionTags = example.actions
-		.map((a) => `  <action>${escapeXmlText(a)}</action>`)
-		.join("\n");
-
 	const paramsByAction = example.params ?? {};
-	const paramsBlocks = Object.entries(paramsByAction)
-		.map(([actionName, params]) => {
-			const inner = Object.entries(params)
-				.map(([k, v]) => {
-					const raw =
-						typeof v === "string" ? v : v === null ? "null" : JSON.stringify(v);
-					return `    <${k}>${escapeXmlText(raw)}</${k}>`;
-				})
-				.join("\n");
-			return `  <${actionName}>\n${inner}\n  </${actionName}>`;
-		})
-		.join("\n");
+	const assistantPayload: Record<string, unknown> = {
+		actions: [...example.actions],
+	};
 
-	const paramsSection =
-		paramsBlocks.length > 0 ? `\n<params>\n${paramsBlocks}\n</params>` : "";
+	if (Object.keys(paramsByAction).length > 0) {
+		assistantPayload.params = paramsByAction;
+	}
 
-	return `User: ${example.user}\nAssistant:\n<actions>\n${actionTags}\n</actions>${paramsSection}`;
+	return `User: ${example.user}\nAssistant:\n${encodeToonValue(assistantPayload)}`;
 }
 
 /**
@@ -129,13 +126,17 @@ export function composeActionCallExamples(
 	return blocks.join("\n\n");
 }
 
-const formatSelectedExamples = (examples: ActionExample[][]): string => {
+const formatSelectedExamples = (
+	examples: ActionExample[][],
+	seed = "actions",
+): string => {
 	const MAX_NAME_PLACEHOLDERS = 5;
 
 	return examples
-		.map((example) => {
-			const randomNames = Array.from({ length: MAX_NAME_PLACEHOLDERS }, () =>
-				uniqueNamesGenerator({ dictionaries: [names] }),
+		.map((example, index) => {
+			const randomNames = getDeterministicNames(
+				MAX_NAME_PLACEHOLDERS,
+				buildDeterministicSeed(seed, index),
 			);
 
 			const conversation = example
@@ -158,62 +159,165 @@ const formatSelectedExamples = (examples: ActionExample[][]): string => {
 		.join("\n");
 };
 
-function shuffleActions<T>(items: T[]): T[] {
-	const shuffled = [...items];
-	for (let i = shuffled.length - 1; i > 0; i--) {
-		const j = Math.floor(Math.random() * (i + 1));
-		[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+function getExampleActionHints(example: ActionExample[]): string[] {
+	const hints = new Set<string>();
+	for (const message of example) {
+		const content = message.content as {
+			action?: unknown;
+			actions?: unknown;
+		};
+		if (typeof content.action === "string" && content.action.trim()) {
+			hints.add(content.action.trim());
+		}
+		if (Array.isArray(content.actions)) {
+			for (const action of content.actions) {
+				if (typeof action === "string" && action.trim()) {
+					hints.add(action.trim());
+				}
+			}
+		}
 	}
-	return shuffled;
+	return [...hints];
 }
 
-export function formatActionNames(actions: Action[]): string {
-	if (!actions || !actions.length) return "";
+function formatActionExampleSummary(action: Action): string | null {
+	const examples = action.examples ?? [];
+	if (!Array.isArray(examples) || examples.length === 0) {
+		return null;
+	}
 
-	return shuffleActions(actions)
+	for (const example of examples) {
+		if (!Array.isArray(example) || example.length === 0) {
+			continue;
+		}
+
+		const userMessage = example[0]?.content?.text?.trim();
+		const actionHints = getExampleActionHints(example);
+		if (!userMessage) {
+			continue;
+		}
+		if (actionHints.length === 0) {
+			return `User: ${JSON.stringify(userMessage)} -> actions: ${action.name}`;
+		}
+
+		return `User: ${JSON.stringify(userMessage)} -> actions: ${actionHints.join(", ")}`;
+	}
+
+	return null;
+}
+
+function shuffleActions<T>(items: T[], seed = "actions"): T[] {
+	return deterministicShuffle(items, seed);
+}
+
+function formatActionSimiles(action: Action): string | null {
+	const similes = [
+		...new Set(
+			(action.similes ?? [])
+				.filter((simile): simile is string => typeof simile === "string")
+				.map((simile) => simile.trim()),
+		),
+	].filter((simile) => simile.length > 0);
+
+	if (similes.length === 0) {
+		return null;
+	}
+
+	return `  aliases[${similes.length}]: ${similes.join(", ")}`;
+}
+
+function formatActionTags(action: Action): string | null {
+	const tags = [
+		...new Set(
+			(action.tags ?? [])
+				.filter((tag): tag is string => typeof tag === "string")
+				.map((tag) => tag.trim()),
+		),
+	].filter((tag) => tag.length > 0 && tag !== "always-include");
+
+	if (tags.length === 0) {
+		return null;
+	}
+
+	return `  tags[${tags.length}]: ${tags.join(", ")}`;
+}
+
+export function formatActionNames(actions: Action[], seed = "actions"): string {
+	if (!actions?.length) return "";
+
+	return shuffleActions(actions, buildDeterministicSeed(seed, "names"))
 		.map((action) => action.name)
 		.join(", ");
 }
 
-export function formatActions(actions: Action[]): string {
-	if (!actions || !actions.length) return "";
+export function formatActions(actions: Action[], seed = "actions"): string {
+	if (!actions?.length) return "";
 
-	return shuffleActions(actions)
+	const actionLines = shuffleActions(
+		actions,
+		buildDeterministicSeed(seed, "descriptions"),
+	)
 		.map((action) => {
-			let actionText = `- **${action.name}**: ${action.description || "No description available"}`;
+			const lines = [
+				`- ${action.name}: ${action.description || "No description available"}`,
+			];
+			const exampleSummary = formatActionExampleSummary(action);
+			const similes = formatActionSimiles(action);
+			const tags = formatActionTags(action);
 
-			if (action.parameters && action.parameters.length > 0) {
-				const paramsText = formatActionParameters(action.parameters);
-				actionText += `\n  Parameters:\n${paramsText}`;
+			if (similes) {
+				lines.push(similes);
 			}
 
-			return actionText;
+			if (tags) {
+				lines.push(tags);
+			}
+
+			if (action.parameters && action.parameters.length > 0) {
+				lines.push(
+					`  params[${action.parameters.length}]: ${formatActionParameters(
+						action.parameters,
+					)}`,
+				);
+			}
+
+			if (exampleSummary) {
+				lines.push(`  example: ${exampleSummary}`);
+			}
+
+			return lines.join("\n");
 		})
 		.join("\n");
+
+	return `actions[${actions.length}]:\n${actionLines}`;
 }
 
 export function formatActionParameters(parameters: ActionParameter[]): string {
-	if (!parameters || !parameters.length) return "";
+	if (!parameters?.length) return "";
 
 	return parameters
 		.map((param) => {
-			const requiredStr = param.required ? " (required)" : " (optional)";
 			const typeStr = formatParameterType(param.schema);
-			const defaultStr =
-				param.schema.default !== undefined
-					? ` [default: ${JSON.stringify(param.schema.default)}]`
-					: "";
-			const enumStr = param.schema.enum
-				? ` [values: ${param.schema.enum.join(", ")}]`
-				: "";
-			const examplesStr =
-				param.examples && param.examples.length > 0
-					? ` [examples: ${param.examples.map((v) => JSON.stringify(v)).join(", ")}]`
-					: "";
+			const modifiers: string[] = [];
 
-			return `    - ${param.name}${requiredStr}: ${param.description} (${typeStr}${enumStr}${defaultStr}${examplesStr})`;
+			if (param.schema.enum?.length) {
+				modifiers.push(`values=${param.schema.enum.join("|")}`);
+			}
+
+			if (param.schema.default !== undefined) {
+				modifiers.push(`default=${JSON.stringify(param.schema.default)}`);
+			}
+
+			if (param.examples && param.examples.length > 0) {
+				modifiers.push(
+					`examples=${param.examples.map((v) => JSON.stringify(v)).join("|")}`,
+				);
+			}
+
+			const suffix = modifiers.length > 0 ? ` [${modifiers.join("; ")}]` : "";
+			return `${param.name}${param.required ? "" : "?"}:${typeStr}${suffix} - ${param.description}`;
 		})
-		.join("\n");
+		.join("; ");
 }
 
 function formatParameterType(schema: ActionParameterSchema): string {
@@ -237,23 +341,84 @@ function formatParameterType(schema: ActionParameterSchema): string {
 	}
 }
 
+/**
+ * Parse action parameters from either the new nested format or the legacy flat format.
+ *
+ * New format (preferred):
+ *   <actions>
+ *     <action><name>ACTION1</name><params><p1>v1</p1></params></action>
+ *   </actions>
+ *
+ * Legacy format (backward-compat – previously stored in content.params):
+ *   <ACTION1><p1>v1</p1></ACTION1>
+ */
 export function parseActionParams(
-	paramsXml: string | undefined | null,
+	paramsInput: unknown,
 ): Map<string, ActionParameters> {
-	const result = new Map<string, ActionParameters>();
+	const toonParams = parseToonActionParams(paramsInput);
+	if (toonParams.size > 0) {
+		return toonParams;
+	}
 
-	if (!paramsXml || typeof paramsXml !== "string") {
+	const result = new Map<string, ActionParameters>();
+	if (!paramsInput || typeof paramsInput !== "string") {
 		return result;
 	}
 
-	const actionBlocks = extractXmlChildren(paramsXml);
+	const paramsXml = paramsInput;
 
-	for (const { key: actionName, value: actionParamsXml } of actionBlocks) {
+	// ---- New nested format: look for <action> children ----
+	const actionChildren = extractXmlChildren(paramsXml);
+	const actionElements = actionChildren.filter((c) => c.key === "action");
+
+	if (actionElements.length > 0) {
+		for (const { value: actionXml } of actionElements) {
+			const children = extractXmlChildren(actionXml);
+			const nameEntry = children.find((c) => c.key === "name");
+			const paramsEntry = children.find((c) => c.key === "params");
+
+			if (!nameEntry) continue;
+			const actionName = nameEntry.value.trim().toUpperCase();
+			if (!actionName) continue;
+
+			if (paramsEntry) {
+				const paramPairs = extractXmlChildren(paramsEntry.value);
+				const actionParams: ActionParameters = {};
+				for (const { key: paramName, value: paramValue } of paramPairs) {
+					actionParams[paramName] = parseParamValue(paramValue);
+				}
+				if (Object.keys(actionParams).length > 0) {
+					result.set(actionName, actionParams);
+				}
+			}
+		}
+		return result;
+	}
+
+	// ---- Legacy flat format: <ACTION_NAME><param>value</param></ACTION_NAME> ----
+	for (const { key: actionName, value: actionParamsXml } of actionChildren) {
 		const params = extractXmlChildren(actionParamsXml);
 		const actionParams: ActionParameters = {};
 
 		for (const { key: paramName, value: paramValue } of params) {
 			actionParams[paramName] = parseParamValue(paramValue);
+		}
+
+		if (Object.keys(actionParams).length === 0) {
+			const structuredParams =
+				parseJSONObjectFromText(actionParamsXml) ??
+				tryParseToonValue(actionParamsXml);
+			if (
+				structuredParams &&
+				typeof structuredParams === "object" &&
+				!Array.isArray(structuredParams)
+			) {
+				for (const [paramName, paramValue] of Object.entries(
+					structuredParams,
+				)) {
+					actionParams[paramName] = toActionParameterValue(paramValue);
+				}
+			}
 		}
 
 		if (Object.keys(actionParams).length > 0) {
@@ -339,11 +504,54 @@ function extractXmlChildren(
 		const closeIdx = searchStart - closeSeq.length;
 		const innerRaw = xml.slice(startTagEnd + 1, closeIdx).trim();
 
-		pairs.push({ key: tag, value: innerRaw });
+		// LLM-tolerance: if the tag is a generic `<param name="X">value</param>`,
+		// prefer the `name` attribute as the key. Some planners emit attribute-
+		// named params instead of tag-named ones, and the canonical handler
+		// expects key=actual-param-name not key="param".
+		let resolvedKey = tag;
+		if (tag.toLowerCase() === "param") {
+			const nameAttrMatch = startTagText.match(
+				/\bname\s*=\s*(?:"([^"]+)"|'([^']+)'|([A-Za-z0-9_-]+))/,
+			);
+			const candidate =
+				nameAttrMatch?.[1] ?? nameAttrMatch?.[2] ?? nameAttrMatch?.[3];
+			if (candidate && candidate.length > 0) {
+				resolvedKey = candidate;
+			}
+		}
+
+		pairs.push({ key: resolvedKey, value: innerRaw });
 		i = searchStart;
 	}
 
 	return pairs;
+}
+
+function toActionParameterValue(value: unknown): ActionParameters[string] {
+	if (value === null || value === undefined) {
+		return null;
+	}
+	if (
+		typeof value === "string" ||
+		typeof value === "number" ||
+		typeof value === "boolean"
+	) {
+		return value as ActionParameterValue;
+	}
+
+	if (Array.isArray(value)) {
+		return value.map((entry) => toActionParameterValue(entry));
+	}
+
+	if (value && typeof value === "object") {
+		const normalized: ActionParameters = {};
+		for (const [key, entry] of Object.entries(value)) {
+			normalized[key] = toActionParameterValue(entry);
+		}
+		return normalized;
+	}
+
+	return value === undefined ? null : String(value);
 }
 
 function parseParamValue(value: string): string | number | boolean | null {
@@ -374,9 +582,10 @@ export function validateActionParams(
 	}
 
 	for (const paramDef of action.parameters) {
-		const extractedValue = extractedParams
-			? extractedParams[paramDef.name]
-			: undefined;
+		const extractedValue = coerceActionParamValue(
+			paramDef,
+			extractedParams ? extractedParams[paramDef.name] : undefined,
+		);
 
 		if (extractedValue === undefined || extractedValue === null) {
 			if (paramDef.required) {
@@ -389,7 +598,11 @@ export function validateActionParams(
 		} else {
 			const typeError = validateParamType(paramDef, extractedValue);
 			if (typeError) {
-				errors.push(typeError);
+				if (paramDef.required) {
+					errors.push(typeError);
+				} else if (paramDef.schema.default !== undefined) {
+					params[paramDef.name] = paramDef.schema.default;
+				}
 			} else {
 				params[paramDef.name] = extractedValue;
 			}
@@ -401,6 +614,74 @@ export function validateActionParams(
 		params: Object.keys(params).length > 0 ? params : undefined,
 		errors,
 	};
+}
+
+function coerceActionParamValue(
+	paramDef: ActionParameter,
+	value: ActionParameters[string] | undefined,
+): ActionParameters[string] | undefined {
+	if (
+		paramDef.schema.type === "string" &&
+		(typeof value === "number" || typeof value === "bigint")
+	) {
+		return String(value);
+	}
+
+	if (paramDef.schema.type !== "array" || Array.isArray(value)) {
+		return value;
+	}
+
+	if (typeof value !== "string") {
+		return value;
+	}
+
+	const trimmed = value.trim();
+	if (!trimmed) {
+		return [];
+	}
+
+	if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+		try {
+			const parsed = JSON.parse(trimmed);
+			if (Array.isArray(parsed)) {
+				return parsed.map((entry) => toActionParameterValue(entry));
+			}
+		} catch {
+			// Fall through to the permissive toon/string coercion paths below.
+		}
+	}
+
+	const xmlChildren = extractXmlChildren(trimmed);
+	if (xmlChildren.length > 0) {
+		return xmlChildren.map(({ value: childValue }) =>
+			toActionParameterValue(childValue),
+		);
+	}
+
+	const toonValue = tryParseToonValue(trimmed);
+	if (Array.isArray(toonValue)) {
+		return toonValue.map((entry) => toActionParameterValue(entry));
+	}
+
+	if (paramDef.schema.items?.type !== "string") {
+		return value;
+	}
+
+	const SAFE_SPLIT_LIMIT = 10_000;
+	const safeTrimmed =
+		trimmed.length > SAFE_SPLIT_LIMIT
+			? trimmed.slice(0, SAFE_SPLIT_LIMIT)
+			: trimmed;
+	const splitValues = safeTrimmed
+		.split(/\|\||,|\n/)
+		.map((entry) => entry.trim())
+		.filter((entry) => entry.length > 0);
+
+	if (splitValues.length === 0) {
+		return [];
+	}
+
+	return splitValues;
 }
 
 type ValidatableParamValue =

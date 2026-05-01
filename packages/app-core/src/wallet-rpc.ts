@@ -1,14 +1,12 @@
-import type {
-  WalletConfigStatus,
-  WalletConfigUpdateRequest,
-  WalletRpcChain,
-  WalletRpcCredentialKey,
-  WalletRpcSelections,
-} from "@elizaos/autonomous/contracts/wallet";
 import {
   DEFAULT_WALLET_RPC_SELECTIONS,
   normalizeWalletRpcSelections,
-} from "@elizaos/autonomous/contracts/wallet";
+  type WalletConfigStatus,
+  type WalletConfigUpdateRequest,
+  type WalletRpcChain,
+  type WalletRpcCredentialKey,
+  type WalletRpcSelections,
+} from "@elizaos/shared";
 
 const PROVIDER_CREDENTIAL_KEYS: Record<
   WalletRpcChain,
@@ -123,8 +121,10 @@ export function buildWalletRpcUpdateRequest(args: {
   selectedProviders:
     | WalletRpcSelections
     | Partial<Record<WalletRpcChain, string | null | undefined>>;
+  selectedNetwork?: "mainnet" | "testnet";
 }): WalletConfigUpdateRequest {
-  const { walletConfig, rpcFieldValues, selectedProviders } = args;
+  const { walletConfig, rpcFieldValues, selectedProviders, selectedNetwork } =
+    args;
   const credentials: Partial<Record<WalletRpcCredentialKey, string>> = {};
   const normalizedSelections = normalizeWalletRpcSelections(selectedProviders);
   const selectedKeys = collectSelectedCredentialKeys(normalizedSelections);
@@ -171,6 +171,9 @@ export function buildWalletRpcUpdateRequest(args: {
 
   return {
     selections: normalizedSelections,
+    walletNetwork:
+      selectedNetwork ??
+      (walletConfig?.walletNetwork === "testnet" ? "testnet" : "mainnet"),
     credentials,
   };
 }

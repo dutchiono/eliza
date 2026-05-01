@@ -1,7 +1,8 @@
 import { v4 as uuidv4 } from "uuid";
 import { beforeEach, describe, expect, it } from "vitest";
+import { InMemoryDatabaseAdapter } from "../database/inMemoryAdapter";
 import { AgentRuntime } from "../runtime";
-import { ServiceType, type UUID } from "../types";
+import { ServiceType, type ServiceTypeName, type UUID } from "../types";
 import type { IAgentRuntime } from "../types/runtime";
 import { Service } from "../types/service";
 
@@ -56,6 +57,7 @@ describe("Service Type System", () => {
 				username: "test",
 				clients: [],
 			},
+			adapter: new InMemoryDatabaseAdapter(),
 		});
 		// Resolve initPromise directly since these tests don't require DB setup
 		// Access private resolver for test purposes
@@ -74,6 +76,9 @@ describe("Service Type System", () => {
 			// Both should be registered
 			expect(runtime.hasService(ServiceType.WALLET)).toBe(true);
 
+			// Trigger lazy startup so instances are available for synchronous lookup
+			await runtime.getServiceLoadPromise(ServiceType.WALLET);
+
 			// Get all wallet services
 			const walletServices = runtime.getServicesByType(ServiceType.WALLET);
 			expect(walletServices).toHaveLength(2);
@@ -88,17 +93,20 @@ describe("Service Type System", () => {
 			await runtime.registerService(MockWalletService1);
 			await runtime.registerService(MockWalletService2);
 
+			// Trigger lazy startup so instances are available for synchronous lookup
+			await runtime.getServiceLoadPromise(ServiceType.WALLET);
+
 			// getService should return the first registered service
 			const firstService = runtime.getService(ServiceType.WALLET);
 			expect(firstService).toBeInstanceOf(MockWalletService1);
 		});
 
-		it("should return empty array for non-existent service type", () => {
+		it("should return empty array for non-existent service type", async () => {
 			const services = runtime.getServicesByType("non-existent-type");
 			expect(services).toHaveLength(0);
 		});
 
-		it("should return null for non-existent service type with getService", () => {
+		it("should return null for non-existent service type with getService", async () => {
 			const service = runtime.getService("non-existent-type");
 			expect(service).toBe(null);
 		});
@@ -110,6 +118,10 @@ describe("Service Type System", () => {
 			await runtime.registerService(MockWalletService1);
 			await runtime.registerService(MockWalletService2);
 			await runtime.registerService(MockPdfService);
+
+			// Trigger lazy startup so instances are available for synchronous lookup
+			await runtime.getServiceLoadPromise(ServiceType.WALLET);
+			await runtime.getServiceLoadPromise(ServiceType.PDF);
 
 			// Check wallet services
 			const walletServices = runtime.getServicesByType(ServiceType.WALLET);
@@ -129,6 +141,10 @@ describe("Service Type System", () => {
 			await runtime.registerService(MockWalletService1);
 			await runtime.registerService(MockWalletService2);
 			await runtime.registerService(MockPdfService);
+
+			// Trigger lazy startup so instances are available for synchronous lookup
+			await runtime.getServiceLoadPromise(ServiceType.WALLET);
+			await runtime.getServiceLoadPromise(ServiceType.PDF);
 
 			const allServices = runtime.getAllServices();
 
@@ -165,6 +181,107 @@ describe("Service Type System", () => {
 		});
 	});
 
+	describe("Eager service start via registerPlugin", () => {
+		it("should preserve rawPath plugin routes", async () => {
+			await runtime.registerPlugin({
+				name: "route-plugin",
+				description: "Test plugin with raw and namespaced routes",
+				routes: [
+					{
+						type: "GET",
+						path: "/api/raw-route",
+						rawPath: true,
+						handler: async () => {},
+					},
+					{
+						type: "GET",
+						path: "/status",
+						handler: async () => {},
+					},
+				],
+			});
+
+			expect(runtime.routes.map((route) => route.path)).toEqual(
+				expect.arrayContaining(["/api/raw-route", "/route-plugin/status"]),
+			);
+		});
+
+		it("should start services eagerly when registered via plugin", async () => {
+			const plugin = {
+				name: "test-eager-plugin",
+				description: "Test plugin for eager service start",
+				services: [MockWalletService1],
+			};
+
+			await runtime.registerPlugin(plugin);
+
+			// Service start is fire-and-forget (awaits initPromise internally),
+			// so wait for it to complete after init resolves.
+			await runtime.getServiceLoadPromise(ServiceType.WALLET);
+
+			// Service should be available via sync getService —
+			// no manual lazy-start trigger needed beyond the eager kick.
+			const service = runtime.getService(ServiceType.WALLET);
+			expect(service).toBeInstanceOf(MockWalletService1);
+		});
+
+		it("should start multiple services eagerly via plugin", async () => {
+			const plugin = {
+				name: "test-multi-service-plugin",
+				description: "Test plugin with multiple services",
+				services: [MockWalletService1, MockPdfService],
+			};
+
+			await runtime.registerPlugin(plugin);
+
+			await Promise.all([
+				runtime.getServiceLoadPromise(ServiceType.WALLET),
+				runtime.getServiceLoadPromise(ServiceType.PDF),
+			]);
+
+			const walletService = runtime.getService(ServiceType.WALLET);
+			const pdfService = runtime.getService(ServiceType.PDF);
+			expect(walletService).toBeInstanceOf(MockWalletService1);
+			expect(pdfService).toBeInstanceOf(MockPdfService);
+		});
+
+		it("should not block registration when a service fails to start", async () => {
+			class FailingService extends Service {
+				static override readonly serviceType =
+					"FAILING_SERVICE" as ServiceTypeName;
+				readonly capabilityDescription = "Service that fails to start";
+
+				static async start(_runtime: IAgentRuntime): Promise<FailingService> {
+					throw new Error("Intentional start failure");
+				}
+
+				async stop(): Promise<void> {}
+			}
+
+			const plugin = {
+				name: "test-failing-plugin",
+				description: "Test plugin with a failing and a working service",
+				services: [FailingService, MockWalletService1],
+			};
+
+			// Should not throw despite FailingService
+			await runtime.registerPlugin(plugin);
+
+			// Wait for the working service to finish starting
+			await runtime.getServiceLoadPromise(ServiceType.WALLET);
+
+			// The working service should still be available
+			const walletService = runtime.getService(ServiceType.WALLET);
+			expect(walletService).toBeInstanceOf(MockWalletService1);
+
+			// The failing service should not be available
+			const failingService = runtime.getService(
+				"FAILING_SERVICE" as ServiceTypeName,
+			);
+			expect(failingService).toBeNull();
+		});
+	});
+
 	describe("Service lifecycle", () => {
 		it("should stop all services of all types", async () => {
 			await runtime.registerService(MockWalletService1);
@@ -173,6 +290,10 @@ describe("Service Type System", () => {
 
 			// Mock the stop methods to track calls
 			const stopCalls: string[] = [];
+
+			// Trigger lazy startup so instances are available for synchronous lookup
+			await runtime.getServiceLoadPromise(ServiceType.WALLET);
+			await runtime.getServiceLoadPromise(ServiceType.PDF);
 
 			const walletServices = runtime.getServicesByType(ServiceType.WALLET);
 			const pdfServices = runtime.getServicesByType(ServiceType.PDF);

@@ -8,13 +8,12 @@
 
 // Export all core modules
 export * from "./actions";
-// Export capabilities and plugin creation
-export * from "./basic-capabilities/index";
 // Export configuration and plugin modules - will be removed once cli cleanup
 export * from "./character";
-export * from "./character-loader";
-// Export character utilities and loader (includes re-exports from constants)
+// Export character utilities
 export * from "./character-utils";
+// Connection management (ensureConnection/ensureConnections) - standalone batch helpers
+export * from "./connection";
 // Export additional constants not re-exported by character-utils
 export {
 	CANONICAL_SECRET_KEYS,
@@ -31,9 +30,26 @@ export {
 export * from "./database";
 export * from "./database/inMemoryAdapter";
 export * from "./entities";
+// Keep evaluator runtime symbols explicit in the node entrypoint. Bun has
+// dropped some of these when they were only re-exported transitively through
+// the basic-capabilities barrel, which leaves dangling exports in dist.
+export {
+	factExtractorEvaluator,
+	skillExtractionEvaluator,
+	skillRefinementEvaluator,
+} from "./features/advanced-capabilities/evaluators/index";
+export * from "./features/advanced-memory";
+// Export capabilities and plugin creation
+export * from "./features/basic-capabilities/index";
+export {
+	SECRETS_SERVICE_TYPE,
+	type SecretsManagerPluginConfig,
+	secretsManagerPlugin,
+} from "./features/secrets/index.ts";
 // Export generated action/provider/evaluator specs from centralized prompts
 export * from "./generated/action-docs";
 export * from "./generated/spec-helpers";
+export * from "./lifeops-passive-connectors";
 export * from "./logger";
 // Export markdown utilities
 export * from "./markdown";
@@ -42,16 +58,21 @@ export * from "./media";
 export * from "./memory";
 // Export network utilities (SSRF protection, secure fetch)
 export * from "./network";
+export { getOptimizationRootDir } from "./optimization-root-dir";
 export * from "./plugin";
-// Export plugin discovery and manifest utilities
 export * from "./plugins";
+
 export * from "./prompts";
 // Export onboarding providers
 export * from "./providers/onboarding-progress";
 // Export skill eligibility provider
 export * from "./providers/skill-eligibility";
+// Provisioning (migrations, agent/entity/room, embedding dimension) - node only
+export * from "./provisioning";
 export * from "./roles";
 export * from "./runtime";
+// Runtime composition (loadCharacters, createRuntimes, getBasicCapabilitiesSettings, mergeSettingsInto) - node only
+export * from "./runtime-composition";
 // Export character schemas
 export * from "./schemas/character";
 // Export base table schemas (abstract SchemaTable definitions + buildBaseTables factory)
@@ -70,6 +91,7 @@ export * from "./services/onboarding-cli";
 export * from "./services/onboarding-rpc";
 // Export onboarding services
 export * from "./services/onboarding-state";
+export * from "./services/optimized-prompt";
 export * from "./services/pairing";
 export * from "./services/pairing-integration";
 export * from "./services/pairing-migration";
@@ -83,12 +105,12 @@ export {
 	unregisterTaskSchedulerRuntime,
 } from "./services/task-scheduler";
 export * from "./services/tool-policy";
-export * from "./services/trajectoryLogger";
+export * from "./services/trajectories";
 // Export sessions utilities
 export * from "./sessions";
 export * from "./settings";
-export * from "./streaming-context";
 export * from "./trajectory-context";
+export * from "./trajectory-utils";
 // Export everything from types
 export * from "./types";
 export * from "./types/agentEvent";
@@ -96,15 +118,30 @@ export * from "./types/message-service";
 // Export onboarding types and utilities
 export * from "./types/onboarding";
 export * from "./types/plugin-manifest";
+// Bun can drop these runtime exports when they are only surfaced through the
+// ./types barrel, which breaks plugin imports of @elizaos/core.
+export * as proto from "./types/proto";
+export {
+	fromJson,
+	type JsonObject,
+	type JsonValue,
+	toJson,
+} from "./types/proto";
 // Export utils first to avoid circular dependency issues
 export * from "./utils";
+/** Single implementation — see `utils/batch-queue/semaphore.ts` (was duplicated on `runtime.ts`). */
+export { Semaphore } from "./utils/batch-queue/semaphore.js";
 export * from "./utils/buffer";
 // Export channel utilities (room/world helpers)
 export * from "./utils/channel-utils";
 // Export browser-compatible utilities
 export * from "./utils/environment";
+// Prompt description compression (parity with Python `compress_prompt_description`)
+export * from "./utils/prompt-compression";
 // Export Node-specific utilities
-export * from "./utils/node";
+export * from "./utils/server-health";
+// Milady state-dir resolution (MILADY_STATE_DIR → ELIZA_STATE_DIR → ~/.milady)
+export * from "./utils/state-dir";
 // Export streaming utilities
 export * from "./utils/streaming";
 // Export validation utilities

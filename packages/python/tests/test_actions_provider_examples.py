@@ -1,7 +1,7 @@
 import pytest
 
 from elizaos.action_docs import with_canonical_action_docs  # noqa: F401 - for send_message_action
-from elizaos.advanced_capabilities.actions import send_message_action
+from elizaos.features.advanced_capabilities.actions import send_message_action
 from elizaos.runtime import AgentRuntime
 from elizaos.types import Character, Content, Memory, as_uuid
 
@@ -14,7 +14,7 @@ async def test_actions_provider_includes_actions_and_parameter_examples() -> Non
     )
     await runtime.initialize()
 
-    # Bootstrap initializes with basic actions only; register an extended action to
+    # BasicCapabilities initializes with basic actions only; register an extended action to
     # verify parameter example formatting end-to-end.
     runtime.register_action(with_canonical_action_docs(send_message_action))
 

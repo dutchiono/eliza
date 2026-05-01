@@ -1,8 +1,4 @@
-/**
- * Provider logo mapping — maps AI provider IDs to their logo image paths.
- *
- * Migrated from apps/app/src/provider-logos.ts.
- */
+/** Provider logo mapping — maps AI provider IDs to their logo image paths. */
 
 export {
   getOnboardingProviderFamily,
@@ -16,67 +12,119 @@ export {
   ONBOARDING_PROVIDER_CATALOG,
   type OnboardingProviderId,
   type ProviderOption as OnboardingProviderOption,
+  requiresAdditionalRuntimeProvider,
   SUBSCRIPTION_PROVIDER_SELECTIONS,
   type SubscriptionProviderSelectionId,
   sortOnboardingProviders,
-} from "@elizaos/autonomous/contracts/onboarding";
+} from "@elizaos/shared";
 
 import { resolveAppAssetUrl } from "../utils/asset-url";
 
 const PROVIDER_LOGO_MAP_DARK: Record<string, string> = {
-  openai: "/logos/openai-icon-white.png",
-  anthropic: "/logos/anthropic-icon-white.png", // Anthropic API Key
-  "anthropic-subscription": "/logos/claude-icon.png", // Claude Subscription
-  "openai-subscription": "/logos/openai-icon-white.png", // ChatGPT Subscription
-  groq: "/logos/groq-icon-white.png",
-  google: "/logos/gemini-icon.png",
-  gemini: "/logos/gemini-icon.png",
-  ollama: "/logos/ollama-icon-white.png",
-  xai: "/logos/grok-icon-white.png",
-  grok: "/logos/grok-icon-white.png",
-  openrouter: "/logos/openrouter-icon-white.png",
-  elizacloud: "/logos/elizaos-icon.png",
-  deepseek: "/logos/deepseek-icon.png",
-  mistral: "/logos/mistral-icon.png",
-  together: "/logos/together-ai-icon.png",
-  "together-ai": "/logos/together-ai-icon.png",
-  zai: "/logos/zai-icon-white.png",
-  "z.ai": "/logos/zai-icon-white.png",
+  openai: "logos/openai-icon-white.png",
+  anthropic: "logos/anthropic-icon-white.png", // Anthropic API Key
+  "anthropic-subscription": "logos/claude-icon.png", // Claude Subscription
+  "openai-subscription": "logos/openai-icon-white.png", // ChatGPT Subscription
+  groq: "logos/groq-icon-white.png",
+  google: "logos/gemini-icon.png",
+  gemini: "logos/gemini-icon.png",
+  ollama: "logos/ollama-icon-white.png",
+  xai: "logos/grok-icon-white.png",
+  grok: "logos/grok-icon-white.png",
+  openrouter: "logos/openrouter-icon-white.png",
+  elizacloud: "logos/elizaos-icon.png",
+  deepseek: "logos/deepseek-icon.png",
+  mistral: "logos/mistral-icon.png",
+  together: "logos/together-ai-icon.png",
+  "together-ai": "logos/together-ai-icon.png",
+  zai: "logos/zai-icon-white.png",
+  "z.ai": "logos/zai-icon-white.png",
 };
 
 const PROVIDER_LOGO_MAP_LIGHT: Record<string, string> = {
-  openai: "/logos/openai-icon.png",
-  anthropic: "/logos/anthropic-icon.png", // Anthropic API Key
-  "anthropic-subscription": "/logos/claude-icon.png", // Claude Subscription
-  "openai-subscription": "/logos/openai-icon.png", // ChatGPT Subscription
-  groq: "/logos/groq-icon.png",
-  google: "/logos/gemini-icon.png",
-  gemini: "/logos/gemini-icon.png",
-  ollama: "/logos/ollama-icon.png",
-  xai: "/logos/grok-icon.png",
-  grok: "/logos/grok-icon.png",
-  openrouter: "/logos/openrouter-icon.png",
-  elizacloud: "/logos/elizaos-icon.png",
-  deepseek: "/logos/deepseek-icon.png",
-  mistral: "/logos/mistral-icon.png",
-  together: "/logos/together-ai-icon.png",
-  "together-ai": "/logos/together-ai-icon.png",
-  zai: "/logos/zai-icon.png",
-  "z.ai": "/logos/zai-icon.png",
+  openai: "logos/openai-icon.png",
+  anthropic: "logos/anthropic-icon.png", // Anthropic API Key
+  "anthropic-subscription": "logos/claude-icon.png", // Claude Subscription
+  "openai-subscription": "logos/openai-icon.png", // ChatGPT Subscription
+  groq: "logos/groq-icon.png",
+  google: "logos/gemini-icon.png",
+  gemini: "logos/gemini-icon.png",
+  ollama: "logos/ollama-icon.png",
+  xai: "logos/grok-icon.png",
+  grok: "logos/grok-icon.png",
+  openrouter: "logos/openrouter-icon.png",
+  elizacloud: "logos/elizaos-icon.png",
+  deepseek: "logos/deepseek-icon.png",
+  mistral: "logos/mistral-icon.png",
+  together: "logos/together-ai-icon.png",
+  "together-ai": "logos/together-ai-icon.png",
+  zai: "logos/zai-icon.png",
+  "z.ai": "logos/zai-icon.png",
 };
 
+// ---------------------------------------------------------------------------
+// Provider logo registry — allows plugins to register logos for custom
+// providers at runtime without modifying the hardcoded maps above.
+// ---------------------------------------------------------------------------
+
+const _registeredLogos: {
+  dark: Record<string, string>;
+  light: Record<string, string>;
+} = { dark: {}, light: {} };
+
 /**
- * Get the logo path for a provider based on theme
+ * Register a provider logo at runtime. Plugins should call this during
+ * initialization to add logos for their custom providers.
+ *
+ * @param providerId - The provider ID (e.g., "my-custom-provider")
+ * @param logos - Logo paths for dark and/or light themes
+ */
+export function registerProviderLogo(
+  providerId: string,
+  logos: { logoDark?: string; logoLight?: string },
+): void {
+  const key = providerId.toLowerCase();
+  if (logos.logoDark) {
+    _registeredLogos.dark[key] = logos.logoDark;
+  }
+  if (logos.logoLight) {
+    _registeredLogos.light[key] = logos.logoLight;
+  }
+}
+
+/**
+ * Get the logo path for a provider based on theme.
+ *
  * @param providerId - The provider ID (e.g., "openai", "anthropic")
  * @param isDarkMode - Whether dark mode is active (default: true)
+ * @param customLogo - Optional custom logo paths (from CustomProviderOption)
  * @returns The logo image path or a fallback SVG data URI
  */
 export function getProviderLogo(
   providerId: string,
   isDarkMode: boolean = true,
+  customLogo?: { logoDark?: string; logoLight?: string },
 ): string {
+  // Check custom logo first (from app-injected providers)
+  const custom = isDarkMode ? customLogo?.logoDark : customLogo?.logoLight;
+  if (custom) {
+    return resolveAppAssetUrl(custom);
+  }
+
+  const key = providerId.toLowerCase();
+
+  // Check runtime-registered logos
+  const registeredMap = isDarkMode
+    ? _registeredLogos.dark
+    : _registeredLogos.light;
+  const registeredLogo = registeredMap[key];
+  if (registeredLogo) {
+    return resolveAppAssetUrl(registeredLogo);
+  }
+
+  // Check hardcoded logo maps
   const logoMap = isDarkMode ? PROVIDER_LOGO_MAP_DARK : PROVIDER_LOGO_MAP_LIGHT;
-  const logo = logoMap[providerId.toLowerCase()];
+  const logo = logoMap[key];
   if (logo) {
     return resolveAppAssetUrl(logo);
   }

@@ -1,28 +1,91 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { Heading, Text } from "../components/ui/typography";
 
-const meta: Meta<typeof Text> = { title: "Atoms/Typography", component: Text };
-export default meta;
+const meta = {
+  title: "UI/Typography",
+  component: Text,
+  tags: ["autodocs"],
+  argTypes: {
+    variant: {
+      control: "select",
+      options: ["default", "medium", "small", "muted", "lead", "large"],
+    },
+  },
+} satisfies Meta<typeof Text>;
 
-export const Headings: StoryObj = {
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Default: Story = {
+  args: { children: "Default text style" },
+};
+
+export const Medium: Story = {
+  args: { variant: "medium", children: "Medium text style" },
+};
+
+export const Small: Story = {
+  args: { variant: "small", children: "Small text style" },
+};
+
+export const Muted: Story = {
+  args: { variant: "muted", children: "Muted text style" },
+};
+
+export const Lead: Story = {
+  args: { variant: "lead", children: "Lead text style" },
+};
+
+export const Large: Story = {
+  args: { variant: "large", children: "Large text style" },
+};
+
+export const AllTextVariants: Story = {
   render: () => (
-    <div className="space-y-3">
-      <Heading level="h1">Agent Dashboard</Heading>
-      <Heading level="h2">Conversations</Heading>
-      <Heading level="h3">Settings</Heading>
-      <Heading level="h4">API Keys</Heading>
+    <div className="space-y-2">
+      <Text variant="default">Default text</Text>
+      <Text variant="medium">Medium text</Text>
+      <Text variant="small">Small text</Text>
+      <Text variant="muted">Muted text</Text>
+      <Text variant="lead">Lead text</Text>
+      <Text variant="large">Large text</Text>
     </div>
   ),
 };
 
-export const TextVariants: StoryObj = {
+export const HeadingH1: Story = {
+  render: () => <Heading level="h1">Heading Level 1</Heading>,
+};
+
+export const HeadingH2: Story = {
+  render: () => <Heading level="h2">Heading Level 2</Heading>,
+};
+
+export const HeadingH3: Story = {
+  render: () => <Heading level="h3">Heading Level 3</Heading>,
+};
+
+export const HeadingH4: Story = {
+  render: () => <Heading level="h4">Heading Level 4</Heading>,
+};
+
+export const HeadingH5: Story = {
+  render: () => <Heading level="h5">Heading Level 5</Heading>,
+};
+
+export const HeadingH6: Story = {
+  render: () => <Heading level="h6">Heading Level 6</Heading>,
+};
+
+export const AllHeadings: Story = {
   render: () => (
-    <div className="space-y-2">
-      <Text variant="large">Deploy your agent in seconds</Text>
-      <Text variant="lead">Connect, configure, launch.</Text>
-      <Text>Standard body text for content areas.</Text>
-      <Text variant="small">Last updated 2 min ago</Text>
-      <Text variant="muted">v1.0.0-beta</Text>
+    <div className="space-y-4">
+      <Heading level="h1">Heading 1</Heading>
+      <Heading level="h2">Heading 2</Heading>
+      <Heading level="h3">Heading 3</Heading>
+      <Heading level="h4">Heading 4</Heading>
+      <Heading level="h5">Heading 5</Heading>
+      <Heading level="h6">Heading 6</Heading>
     </div>
   ),
 };

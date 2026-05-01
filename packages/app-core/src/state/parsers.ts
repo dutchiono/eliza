@@ -46,6 +46,29 @@ export function parseAgentStatusEvent(
   };
 }
 
+/**
+ * Parses `agentStatus` from a `desktopTrayMenuClick` payload when the main
+ * process finishes menu reset (`itemId === "menu-reset-app-applied"`).
+ */
+export function parseAgentStatusFromMainMenuResetPayload(
+  payload: unknown,
+): AgentStatus | null {
+  if (
+    !payload ||
+    typeof payload !== "object" ||
+    Array.isArray(payload) ||
+    !("agentStatus" in payload)
+  ) {
+    return null;
+  }
+  const as = (payload as { agentStatus?: Record<string, unknown> | null })
+    .agentStatus;
+  if (!as || typeof as !== "object" || Array.isArray(as)) {
+    return null;
+  }
+  return parseAgentStatusEvent(as);
+}
+
 export function parseAgentStartupDiagnostics(
   value: unknown,
 ): AgentStartupDiagnostics | undefined {
@@ -61,6 +84,22 @@ export function parseAgentStartupDiagnostics(
     startup.lastErrorAt = value.lastErrorAt;
   if (typeof value.nextRetryAt === "number")
     startup.nextRetryAt = value.nextRetryAt;
+  const embPhase = value.embeddingPhase;
+  if (
+    embPhase === "checking" ||
+    embPhase === "downloading" ||
+    embPhase === "loading" ||
+    embPhase === "ready"
+  ) {
+    startup.embeddingPhase = embPhase;
+  }
+  if (typeof value.embeddingDetail === "string") {
+    startup.embeddingDetail = value.embeddingDetail;
+  }
+  const embPct = value.embeddingProgressPct;
+  if (typeof embPct === "number" && Number.isFinite(embPct)) {
+    startup.embeddingProgressPct = Math.max(0, Math.min(100, embPct));
+  }
   return startup;
 }
 
@@ -108,7 +147,15 @@ export function parseConversationMessageEvent(
   const text = value.text;
   const timestamp = value.timestamp;
   const source = value.source;
+  const actionName = value.actionName;
+  const actionCallbackHistory = value.actionCallbackHistory;
   const from = value.from;
+  const fromUserName = value.fromUserName;
+  const avatarUrl = value.avatarUrl;
+  const replyToMessageId = value.replyToMessageId;
+  const replyToSenderName = value.replyToSenderName;
+  const replyToSenderUserName = value.replyToSenderUserName;
+  const reactions = value.reactions;
   if (
     typeof id !== "string" ||
     (role !== "user" && role !== "assistant") ||
@@ -121,8 +168,86 @@ export function parseConversationMessageEvent(
   if (typeof source === "string" && source.length > 0) {
     parsed.source = source;
   }
+  if (typeof actionName === "string" && actionName.length > 0) {
+    parsed.actionName = actionName;
+  }
+  if (Array.isArray(actionCallbackHistory)) {
+    const normalized = actionCallbackHistory.filter(
+      (entry): entry is string =>
+        typeof entry === "string" && entry.trim().length > 0,
+    );
+    if (normalized.length > 0) {
+      parsed.actionCallbackHistory = normalized;
+    }
+  }
   if (typeof from === "string" && from.length > 0) {
     parsed.from = from;
+  }
+  if (typeof fromUserName === "string" && fromUserName.length > 0) {
+    parsed.fromUserName = fromUserName;
+  }
+  if (typeof avatarUrl === "string" && avatarUrl.length > 0) {
+    parsed.avatarUrl = avatarUrl;
+  }
+  if (typeof replyToMessageId === "string" && replyToMessageId.length > 0) {
+    parsed.replyToMessageId = replyToMessageId;
+  }
+  if (typeof replyToSenderName === "string" && replyToSenderName.length > 0) {
+    parsed.replyToSenderName = replyToSenderName;
+  }
+  if (
+    typeof replyToSenderUserName === "string" &&
+    replyToSenderUserName.length > 0
+  ) {
+    parsed.replyToSenderUserName = replyToSenderUserName;
+  }
+  if (Array.isArray(reactions)) {
+    const parsedReactions = reactions
+      .map((reaction) => {
+        if (!isRecord(reaction)) return null;
+        const emoji = reaction.emoji;
+        const count = reaction.count;
+        const users = reaction.users;
+        if (
+          typeof emoji !== "string" ||
+          emoji.length === 0 ||
+          typeof count !== "number" ||
+          !Number.isFinite(count) ||
+          count <= 0
+        ) {
+          return null;
+        }
+        const parsedReaction: {
+          emoji: string;
+          count: number;
+          users?: string[];
+        } = {
+          emoji,
+          count,
+        };
+        if (Array.isArray(users)) {
+          const parsedUsers = users.filter(
+            (user): user is string =>
+              typeof user === "string" && user.length > 0,
+          );
+          if (parsedUsers.length > 0) {
+            parsedReaction.users = parsedUsers;
+          }
+        }
+        return parsedReaction;
+      })
+      .filter(
+        (
+          reaction,
+        ): reaction is {
+          emoji: string;
+          count: number;
+          users?: string[];
+        } => reaction !== null,
+      );
+    if (parsedReactions.length > 0) {
+      parsed.reactions = parsedReactions;
+    }
   }
   return parsed;
 }
@@ -269,6 +394,7 @@ export function parseCustomActionParams(
   return { params, missingRequired };
 }
 
+/** Plain-text variant of formatSearchBullet (uses `- ` bullets, no bold). */
 export function formatSearchBullet(label: string, items: string[]): string {
   if (items.length === 0) return `${label}: none`;
   return `${label}:\n${items.map((item) => `- ${item}`).join("\n")}`;
@@ -293,6 +419,7 @@ export function asApiLikeError(err: unknown): ApiLikeError | null {
   };
 }
 
+/** API-error-aware variant that extracts path/status/message from structured errors. */
 export function formatStartupErrorDetail(err: unknown): string | undefined {
   const apiErr = asApiLikeError(err);
   if (apiErr) {

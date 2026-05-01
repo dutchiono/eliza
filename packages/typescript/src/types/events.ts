@@ -3,6 +3,7 @@ import type { Entity, Room, World } from "./environment";
 import type { Memory } from "./memory";
 import type { ControlMessage } from "./messaging";
 import type { ModelTypeName } from "./model";
+import type { PipelineHookPhase } from "./pipeline-hooks";
 import type { Content, JsonValue, UUID } from "./primitives";
 import type { IAgentRuntime } from "./runtime";
 
@@ -79,7 +80,7 @@ export enum EventType {
 	HOOK_SESSION_END = "HOOK_SESSION_END",
 
 	// Hook system events - agent lifecycle
-	HOOK_AGENT_BOOTSTRAP = "HOOK_AGENT_BOOTSTRAP",
+	HOOK_AGENT_BASIC_CAPABILITIES = "HOOK_AGENT_BASIC_CAPABILITIES",
 	HOOK_AGENT_START = "HOOK_AGENT_START",
 	HOOK_AGENT_END = "HOOK_AGENT_END",
 
@@ -98,6 +99,9 @@ export enum EventType {
 
 	// Hook system events - message lifecycle (supplements MESSAGE_*)
 	HOOK_MESSAGE_SENDING = "HOOK_MESSAGE_SENDING",
+
+	/** Per-invocation timing for `registerPipelineHook` handlers (telemetry / dashboards). */
+	PIPELINE_HOOK_METRIC = "PIPELINE_HOOK_METRIC",
 }
 
 /**
@@ -283,9 +287,9 @@ export interface HookCommandPayload extends HookEventPayload {
 }
 
 /**
- * Bootstrap file definition for agent bootstrap hooks
+ * File definition for agent basic-capabilities hooks
  */
-export interface BootstrapFile {
+export interface BasicCapabilitiesFile {
 	/** File path relative to workspace */
 	path: string;
 	/** File content */
@@ -297,13 +301,13 @@ export interface BootstrapFile {
 }
 
 /**
- * Payload for agent bootstrap hook event (HOOK_AGENT_BOOTSTRAP)
+ * Payload for agent basic-capabilities hook event (HOOK_AGENT_BASIC_CAPABILITIES)
  */
-export interface HookAgentBootstrapPayload extends HookEventPayload {
+export interface HookAgentBasicCapabilitiesPayload extends HookEventPayload {
 	/** Workspace directory path */
 	workspaceDir: string;
-	/** Bootstrap files that will be injected. Hooks can modify this array. */
-	bootstrapFiles: BootstrapFile[];
+	/** Files that will be injected. Hooks can modify this array. */
+	"basic-capabilitiesFiles": BasicCapabilitiesFile[];
 	/** Agent ID */
 	agentId?: string;
 	/** Session ID */
@@ -401,6 +405,20 @@ export interface HookMessageSendingPayload extends HookEventPayload {
 }
 
 /**
+ * Payload for pipeline hook timing events ({@link EventType.PIPELINE_HOOK_METRIC}).
+ */
+export interface PipelineHookMetricPayload extends EventPayload {
+	phase: PipelineHookPhase;
+	hookId: string;
+	durationMs: number;
+	roomId: UUID;
+	/** True when duration meets `PIPELINE_HOOK_WARN_MS` (see `pipeline-hooks.ts`). */
+	slow: boolean;
+	/** Set when the hook handler threw (runtime still continued). */
+	error?: string;
+}
+
+/**
  * Maps event types to their corresponding payload types
  */
 export interface EventPayloadMap {
@@ -439,7 +457,7 @@ export interface EventPayloadMap {
 	[EventType.HOOK_COMMAND_STOP]: HookCommandPayload;
 	[EventType.HOOK_SESSION_START]: HookSessionPayload;
 	[EventType.HOOK_SESSION_END]: HookSessionPayload;
-	[EventType.HOOK_AGENT_BOOTSTRAP]: HookAgentBootstrapPayload;
+	[EventType.HOOK_AGENT_BASIC_CAPABILITIES]: HookAgentBasicCapabilitiesPayload;
 	[EventType.HOOK_AGENT_START]: HookAgentLifecyclePayload;
 	[EventType.HOOK_AGENT_END]: HookAgentLifecyclePayload;
 	[EventType.HOOK_GATEWAY_START]: HookGatewayPayload;
@@ -450,6 +468,7 @@ export interface EventPayloadMap {
 	[EventType.HOOK_TOOL_AFTER]: HookToolPayload;
 	[EventType.HOOK_TOOL_PERSIST]: HookToolPayload;
 	[EventType.HOOK_MESSAGE_SENDING]: HookMessageSendingPayload;
+	[EventType.PIPELINE_HOOK_METRIC]: PipelineHookMetricPayload;
 }
 
 /**

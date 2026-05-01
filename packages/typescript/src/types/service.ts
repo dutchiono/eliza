@@ -36,6 +36,7 @@ export interface ServiceTypeRegistry {
 	HOOKS: "hooks";
 	PAIRING: "pairing";
 	AGENT_EVENT: "agent_event";
+	OPTIMIZED_PROMPT: "optimized_prompt";
 	UNKNOWN: "unknown";
 }
 
@@ -125,6 +126,7 @@ export const ServiceType = {
 	PAIRING: "pairing",
 	AGENT_EVENT: "agent_event",
 	VOICE_CACHE: "voice_cache",
+	OPTIMIZED_PROMPT: "optimized_prompt",
 	UNKNOWN: "unknown",
 } as const;
 
@@ -189,7 +191,8 @@ export interface TypedService<
 }
 
 /**
- * Generic factory function to create a typed service instance
+ * Generic factory function to create a typed service instance.
+ * getService() is synchronous — no await needed.
  * @param runtime The agent runtime
  * @param serviceType The type of service to get
  * @returns The service instance or null if not available

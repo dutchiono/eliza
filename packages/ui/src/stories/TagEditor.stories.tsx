@@ -2,52 +2,62 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { useState } from "react";
 import { TagEditor } from "../components/ui/tag-editor";
 
-const meta: Meta<typeof TagEditor> = {
-  title: "Molecules/TagEditor",
+const meta = {
+  title: "UI/TagEditor",
   component: TagEditor,
-};
-export default meta;
-
-export const Default: StoryObj = {
-  render: () => {
-    const [items, setItems] = useState(["react", "typescript", "storybook"]);
-    return (
-      <div className="w-80">
-        <TagEditor label="Technologies" items={items} onChange={setItems} />
-      </div>
-    );
+  tags: ["autodocs"],
+  argTypes: {
+    label: { control: "text" },
+    placeholder: { control: "text" },
   },
-};
+} satisfies Meta<typeof TagEditor>;
 
-export const Empty: StoryObj = {
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Default: Story = {
   render: () => {
     const [items, setItems] = useState<string[]>([]);
     return (
-      <div className="w-80">
-        <TagEditor
-          label="Interests"
-          items={items}
-          onChange={setItems}
-          placeholder="Type an interest…"
-        />
-      </div>
+      <TagEditor
+        label="Tags"
+        items={items}
+        onChange={setItems}
+        placeholder="Add a tag..."
+        className="w-80"
+      />
     );
   },
 };
 
-export const CustomLabels: StoryObj = {
+export const WithItems: Story = {
   render: () => {
-    const [items, setItems] = useState(["english", "spanish"]);
+    const [items, setItems] = useState(["react", "typescript", "storybook"]);
     return (
-      <div className="w-80">
-        <TagEditor
-          label="Languages"
-          items={items}
-          onChange={setItems}
-          addLabel="+ Add"
-          removeLabel="✕"
-        />
-      </div>
+      <TagEditor
+        label="Technologies"
+        items={items}
+        onChange={setItems}
+        placeholder="Add technology..."
+        className="w-80"
+      />
+    );
+  },
+};
+
+export const CustomLabels: Story = {
+  render: () => {
+    const [items, setItems] = useState(["admin", "editor"]);
+    return (
+      <TagEditor
+        label="Roles"
+        items={items}
+        onChange={setItems}
+        addLabel="Add"
+        removeLabel="Remove"
+        placeholder="Add role..."
+        className="w-80"
+      />
     );
   },
 };

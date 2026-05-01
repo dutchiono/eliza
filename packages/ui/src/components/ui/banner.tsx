@@ -1,9 +1,14 @@
-import { cva, type VariantProps } from "class-variance-authority";
+import { cva } from "class-variance-authority";
 import { AlertTriangle, Info, X, XCircle } from "lucide-react";
 import * as React from "react";
 import { cn } from "../../lib/utils";
+import { Button } from "./button";
 
-const bannerVariants = cva(
+type BannerVariantsProps = {
+  variant?: "error" | "warning" | "info" | null;
+};
+
+const _bannerVariants = cva(
   "flex items-center gap-3 border px-4 py-2.5 text-xs",
   {
     variants: {
@@ -19,6 +24,9 @@ const bannerVariants = cva(
   },
 );
 
+const bannerVariants: (props?: BannerVariantsProps) => string =
+  _bannerVariants as (props?: BannerVariantsProps) => string;
+
 const ICONS: Record<string, React.ElementType> = {
   error: XCircle,
   warning: AlertTriangle,
@@ -27,7 +35,7 @@ const ICONS: Record<string, React.ElementType> = {
 
 export interface BannerProps
   extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof bannerVariants> {
+    BannerVariantsProps {
   /** Optional action element (button, link) */
   action?: React.ReactNode;
   /** Show dismiss button */
@@ -65,14 +73,15 @@ export const Banner = React.forwardRef<HTMLDivElement, BannerProps>(
         <span className="flex-1">{children}</span>
         {action}
         {dismissible && (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={onDismiss}
-            className="rounded-sm p-0.5 opacity-70 hover:opacity-100 transition-opacity"
+            className="h-6 w-6 rounded-sm opacity-70 hover:opacity-100 transition-opacity"
             aria-label={dismissLabel}
           >
             <X className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         )}
       </div>
     );
