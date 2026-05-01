@@ -10,10 +10,17 @@ const ANY_TYPE_PATTERN = /:\s*any\b|<\s*any\s*>|\bas\s+any\b/;
 // against Markdown, YAML, JSON, shell scripts, or other non-source files where
 // the literal strings may legitimately appear in prose or configuration.
 const SOURCE_CODE_EXTENSIONS = /\.(?:m|c)?[jt]sx?$/i;
+const REGRESSION_TEST_FILE_PATTERN =
+  /\.(?:e2e\.)?test\.(?:[cm]?[jt]s|[jt]sx)$/i;
+const E2E_TEST_FILE_PATTERN = /\.e2e\.test\.(?:[cm]?[jt]s|[jt]sx)$/i;
 const DEFAULT_MAX_BUFFER = 16 * 1024 * 1024;
 
 export function isSourceCode(file) {
   return SOURCE_CODE_EXTENSIONS.test(file);
+}
+
+export function isRegressionTestFile(file) {
+  return REGRESSION_TEST_FILE_PATTERN.test(file);
 }
 
 // Files whose changes do not require accompanying regression tests. Broader
@@ -294,7 +301,7 @@ export function scanForBlockedDiffPatterns(base, changedFiles) {
   const sourceFiles = changedFiles.filter(
     (file) =>
       file !== "scripts/pre-review-local.mjs" &&
-      !/\.(?:e2e\.)?test\.(tsx?|jsx?)$/i.test(file) &&
+      !isRegressionTestFile(file) &&
       isSourceCode(file),
   );
   if (sourceFiles.length === 0) return [];
@@ -326,7 +333,7 @@ export function splitRunnableTestFiles(testFiles) {
   for (const file of testFiles) {
     if (file.startsWith("packages/homepage/")) {
       homepageTests.push(path.relative("packages/homepage", file));
-    } else if (/\.e2e\.test\.[jt]sx?$/.test(file)) {
+    } else if (E2E_TEST_FILE_PATTERN.test(file)) {
       if (file.startsWith("test/") || file.startsWith("eliza/test/")) {
         repoE2eTests.push(file);
       }
@@ -476,9 +483,7 @@ export function runChecks() {
       classification === "feature" ||
       classification === "security")
   ) {
-    const testFiles = changed.files.filter((file) =>
-      /\.(?:e2e\.)?test\.(ts|tsx|js|jsx)$/.test(file),
-    );
+    const testFiles = changed.files.filter(isRegressionTestFile);
     if (testFiles.length === 0) {
       issues.push("No changed test files found for a behavioral change.");
       missingTests.push(

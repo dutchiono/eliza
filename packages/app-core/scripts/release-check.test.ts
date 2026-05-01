@@ -30,6 +30,21 @@ describe("release-check pack dry-run guard", () => {
   });
 });
 
+describe("pre-review local guard", () => {
+  it("recognizes ESM and CJS regression test files", async () => {
+    const { isRegressionTestFile } = await import("./pre-review-local.mjs");
+
+    expect(
+      isRegressionTestFile(
+        "scripts/sync-root-github-workflows-from-eliza.test.mjs",
+      ),
+    ).toBe(true);
+    expect(isRegressionTestFile("packages/app-core/foo.test.cjs")).toBe(true);
+    expect(isRegressionTestFile("test/foo.e2e.test.mts")).toBe(true);
+    expect(isRegressionTestFile("packages/app-core/foo.ts")).toBe(false);
+  });
+});
+
 describe("Windows installer release contracts", () => {
   it("keeps the smoke installer root compatible with both env prefixes", () => {
     const script = readFileSync(
