@@ -487,14 +487,15 @@ function stageDesktopBuild() {
     },
   );
 
+  // Install from the consumer repo root so bun resolves the full workspace
+  // graph (which registers both apps/<app> and eliza's platform dirs).
+  // Running these from APP_DIR/ELECTROBUN_DIR makes bun walk up to the nearest
+  // package.json with a "workspaces" field; on consumers like milady, that's
+  // eliza/package.json — which does not include packages/app-core/platforms/*,
+  // so workspace deps like @elizaos/shared:workspace:* fail to resolve.
   runBun(["install", "--ignore-scripts"], {
-    cwd: APP_DIR,
-    label: "Ensuring app workspace dependencies are installed",
-  });
-
-  runBun(["install", "--ignore-scripts"], {
-    cwd: ELECTROBUN_DIR,
-    label: "Ensuring Electrobun workspace dependencies are installed",
+    cwd: ROOT,
+    label: "Ensuring desktop workspace dependencies are installed",
   });
 
   runPackageBinary("vite", ["build"], {
