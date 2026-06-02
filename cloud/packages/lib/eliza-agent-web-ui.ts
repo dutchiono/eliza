@@ -16,6 +16,8 @@ export interface ElizaAgentWebUiUrlOptions {
   path?: string;
 }
 
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+
 /** Resolved base domain for the current deployment (e.g. "waifu.fun"). */
 export function getAgentBaseDomain(): string {
   return (
@@ -50,6 +52,23 @@ function applyPath(baseUrl: string, path = "/"): string {
   url.hash = normalizedPath.hash;
 
   return url.toString();
+}
+
+function isIpv4Host(hostname: string): boolean {
+  return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname);
+}
+
+function isLikelyIpv6Host(hostname: string): boolean {
+  return hostname.includes(":");
+}
+
+function shouldRewriteToPublicAgentUrl(url: URL): boolean {
+  const hostname = url.hostname.toLowerCase();
+  if (url.protocol !== "https:") {
+    return true;
+  }
+
+  return LOOPBACK_HOSTS.has(hostname) || isIpv4Host(hostname) || isLikelyIpv6Host(hostname);
 }
 
 // Server-only: reads process.env. Do not import in client components.
@@ -122,4 +141,32 @@ export function getClientSafeElizaAgentWebUiUrl(
   }
 
   return null;
+}
+
+export function normalizeElizaAgentPairingRedirectUrl(
+  sandboxId: string,
+  redirectUrl: string,
+  options: Pick<ElizaAgentWebUiUrlOptions, "baseDomain"> = {},
+): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(redirectUrl);
+  } catch {
+    return redirectUrl;
+  }
+
+  if (!shouldRewriteToPublicAgentUrl(parsed)) {
+    return redirectUrl;
+  }
+
+  const publicBaseUrl = getElizaAgentPublicWebUiUrl(
+    { id: sandboxId, headscale_ip: null },
+    { ...options, path: "/" },
+  );
+  if (!publicBaseUrl) {
+    return redirectUrl;
+  }
+
+  const path = `${parsed.pathname}${parsed.search}${parsed.hash}` || "/";
+  return applyPath(publicBaseUrl, path);
 }

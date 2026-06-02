@@ -1,6 +1,7 @@
 "use client";
 
 import { toast } from "sonner";
+import { normalizeElizaAgentPairingRedirectUrl } from "@/lib/eliza-agent-web-ui";
 
 /**
  * Opens the Agent Web UI for an agent via the pairing token flow.
@@ -43,7 +44,7 @@ export async function openWebUIWithPairing(agentId: string): Promise<void> {
       return;
     }
     if (data?.redirectUrl) {
-      popup.location.href = data.redirectUrl;
+      popup.location.href = normalizeElizaAgentPairingRedirectUrl(agentId, data.redirectUrl);
     } else {
       popup.close();
       toast.error("No redirect URL returned from pairing token endpoint");

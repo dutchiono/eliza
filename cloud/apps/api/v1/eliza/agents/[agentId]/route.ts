@@ -14,7 +14,7 @@ import { userCharactersRepository } from "@/db/repositories/characters";
 import { agentServerWallets } from "@/db/schemas/agent-server-wallets";
 import { failureResponse } from "@/lib/api/cloud-worker-errors";
 import { requireUserOrApiKeyWithOrg } from "@/lib/auth/workers-hono-auth";
-import { getPreferredElizaAgentWebUiUrl } from "@/lib/eliza-agent-web-ui";
+import { getElizaAgentPublicWebUiUrl } from "@/lib/eliza-agent-web-ui";
 import { adminService } from "@/lib/services/admin";
 import { reusesExistingElizaCharacter } from "@/lib/services/eliza-agent-config";
 import { elizaSandboxService } from "@/lib/services/eliza-sandbox";
@@ -61,7 +61,7 @@ function toAdminDetailsDto(agent: Agent, isDockerAgent: boolean): AgentAdminDeta
     webUiPort: agent.web_ui_port,
     dockerImage: agent.docker_image,
     isDockerBacked: isDockerAgent,
-    webUiUrl: getPreferredElizaAgentWebUiUrl(agent),
+    webUiUrl: getElizaAgentPublicWebUiUrl(agent),
     sshCommand: agent.headscale_ip ? `ssh root@${agent.headscale_ip}` : null,
   };
 }

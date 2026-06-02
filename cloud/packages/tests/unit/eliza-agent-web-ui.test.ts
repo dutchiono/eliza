@@ -5,6 +5,7 @@ import {
   getElizaAgentDirectWebUiUrl,
   getElizaAgentPublicWebUiUrl,
   getPreferredElizaAgentWebUiUrl,
+  normalizeElizaAgentPairingRedirectUrl,
 } from "../../lib/eliza-agent-web-ui";
 
 const savedAgentBaseDomain = process.env.ELIZA_CLOUD_AGENT_BASE_DOMAIN;
@@ -116,5 +117,25 @@ describe("getClientSafeElizaAgentWebUiUrl", () => {
 describe("getElizaAgentDirectWebUiUrl", () => {
   test("returns null when headscale access is unavailable", () => {
     expect(getElizaAgentDirectWebUiUrl(makeSandbox({ headscale_ip: null }))).toBeNull();
+  });
+});
+
+describe("normalizeElizaAgentPairingRedirectUrl", () => {
+  test("rewrites raw node pairing URLs to the canonical agent domain", () => {
+    expect(
+      normalizeElizaAgentPairingRedirectUrl(
+        "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "http://88.99.66.168:22783/pair?token=tok-1",
+      ),
+    ).toBe("https://aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.agent.shad0w.xyz/pair?token=tok-1");
+  });
+
+  test("preserves already-public https pairing URLs", () => {
+    expect(
+      normalizeElizaAgentPairingRedirectUrl(
+        "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "https://aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.agent.shad0w.xyz/pair?token=tok-2",
+      ),
+    ).toBe("https://aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.agent.shad0w.xyz/pair?token=tok-2");
   });
 });
